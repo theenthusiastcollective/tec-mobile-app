@@ -5,7 +5,7 @@
     "owner": "team-tec",
     "version": "1.0.2",
     "orientation": "portrait",
-    "icon": "./assets/tec-app-icon.png",
+    "icon": "./assets/tec-app-icon-metallic.png",
     "userInterfaceStyle": "dark",
     "assetBundlePatterns": ["assets/**/*"],
     "plugins": [
@@ -23,7 +23,7 @@
       "package": "com.teccarclub.app",
       "versionCode": 3,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/tec-adaptive-foreground.png",
+        "foregroundImage": "./assets/tec-app-icon-metallic.png",
         "backgroundColor": "#050608"
       },
       "permissions": ["READ_MEDIA_IMAGES"]
