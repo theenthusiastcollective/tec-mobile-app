@@ -1,0 +1,42 @@
+{
+  "expo": {
+    "name": "The Enthusiast Collective",
+    "slug": "the-enthusiast-collective",
+    "owner": "team-tec",
+    "version": "1.0.2",
+    "orientation": "portrait",
+    "icon": "./assets/tec-app-icon.png",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": ["assets/**/*"],
+    "plugins": [
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/tec-logo-transparent.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#050608"
+        }
+      ],
+      "expo-image-picker"
+    ],
+    "android": {
+      "package": "com.teccarclub.app",
+      "versionCode": 3,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/tec-adaptive-foreground.png",
+        "backgroundColor": "#050608"
+      },
+      "permissions": ["READ_MEDIA_IMAGES"]
+    },
+    "ios": {
+      "bundleIdentifier": "com.teccarclub.app",
+      "buildNumber": "1",
+      "supportsTablet": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "f17a4d59-d112-41e7-aabb-b2ff51cdc218"
+      }
+    }
+  }
+}
