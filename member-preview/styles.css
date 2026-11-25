@@ -140,7 +140,7 @@ h1,h2,h3,h4,.design-caption strong,.intro-motto,.app-motto{font-weight:400;font-
 .ticket-body{min-width:0;padding:13px}
 .ticket-flyer{display:block;width:100%;height:190px;padding:5px;border:1px solid #3c3033;border-radius:10px;background:#060709;overflow:hidden}
 .ticket-flyer img{width:100%;height:100%;object-fit:contain}
-.ticket-type{font-size:11px;font-weight:700;letter-spacing:.08em;line-height:1.5;text-transform:uppercase;color:#ee5454;margin:14px 0 7px}
+.ticket-type{display:table;width:fit-content;max-width:100%;padding:2px 7px;border-radius:3px;background:#a41f2b;color:#fff;font-size:10px;font-weight:700;letter-spacing:.04em;line-height:1.35;margin:0 0 5px}.ticket-type:empty{display:none}
 .ticket-body h2,.ticket-body h3{font-size:14px;line-height:1.5;margin:0;overflow-wrap:anywhere;letter-spacing:0}
 .ticket-time{font-size:14px;line-height:1.5;font-weight:600;color:#f0f2f5;margin:10px 0}
 .ticket-venue{font-size:14px;font-weight:600;line-height:1.5;color:#c2c8d3;margin:10px 0 4px;overflow-wrap:anywhere}
@@ -154,7 +154,7 @@ h1,h2,h3,h4,.design-caption strong,.intro-motto,.app-motto{font-weight:400;font-
 .event-ticket-compact .ticket-flyer{height:95px;padding:2px;border-radius:5px;flex-shrink:0}
 .event-ticket-compact .ticket-date b{font-size:20px}
 .event-ticket-compact .ticket-body{padding:13px 11px}
-.event-ticket-compact .ticket-type{display:none}
+
 .event-ticket-compact .ticket-body h2{font-size:13px;line-height:1.5}
 .event-ticket-compact .ticket-time{font-size:12px;margin:8px 0}
 .event-ticket-compact .ticket-venue{font-size:12px;line-height:1.5;margin:8px 0 4px}
