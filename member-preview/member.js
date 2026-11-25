@@ -54,6 +54,47 @@ function showLogin(message='') {
     <p role="alert" class="form-error">${esc(message)}</p><button class="action full">Sign in</button></form>
     <button class="small-link" data-action="recover">Forgot password?</button></div>`, true);
 }
+const recoveryKey = 'tec-password-request';
+function recoveryEmail() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(recoveryKey));
+    if (saved && saved.until > Date.now()) return saved.email;
+  } catch {}
+  localStorage.removeItem(recoveryKey);
+  return '';
+}
+function showRecoveryLink(token = '') {
+  const email = recoveryEmail();
+  const prompt = email ? `Continue to reset the password for ${esc(email)}.` : 'Continue only if you requested this TEC email.';
+  sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">${email ? 'Reset password' : 'Confirm your email'}</h2>
+    <p>${prompt}</p><form data-form="confirm-link">
+    ${token ? '' : '<label>Link from your TEC email<input name="link" type="url" autocomplete="off" required></label><p>Open the link on this phone, or press and hold the link in your email, copy it, and paste it here.</p>'}
+    ${errorLine}<button class="action full">Continue</button></form></div>`, true);
+  dialog.querySelector('form').emailToken = token;
+}
+function showNewPassword(email) {
+  sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Choose a new password</h2>
+    <p>${esc(email)}</p><form data-form="new-password">
+    <label>New password<input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+    <label>Confirm password<input type="password" name="confirm" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+    <p>Use at least 12 characters.</p>${errorLine}<button class="action full">Save password</button></form></div>`, true);
+  dialog.querySelector('form').recoveryEmail = email;
+}
+function tokenFromResetLink(value) {
+  try {
+    const url = new URL(value);
+    if (url.origin === 'https://teccarclub.com' && !url.username && !url.password &&
+        ['/', '/android/reset'].includes(url.pathname)) {
+      return /^#email-confirm\/([A-Za-z0-9_-]{32,256})$/.exec(url.hash)?.[1] || '';
+    }
+  } catch {}
+  return '';
+}
+window.tecReceiveEmailLink = token => {
+  if (!/^[A-Za-z0-9_-]{32,256}$/.test(token)) return;
+  revision++; modalRequest++;
+  showRecoveryLink(token);
+};
 function setMember(profile) {
   member=profile.member;
   vehicles=profile.vehicles.map(row=>asVehicle(row,member.name,true));
@@ -158,11 +199,29 @@ async function submitForm(form) {
   const data=new FormData(form), id=form.dataset.id, kind=form.dataset.form;
   if(kind==='login'){
     await request('/api/auth/password-signin','POST',{email:data.get('email'),password:data.get('password')});
-    form.elements.password.value='';await startMember();return;
+    localStorage.removeItem(recoveryKey);form.elements.password.value='';await startMember();return;
   }
   if(kind==='recover'){
     await request('/api/auth/email','POST',{email:data.get('email'),recovery:true});
-    showLogin('Check your email for password reset instructions.');return;
+    localStorage.setItem(recoveryKey, JSON.stringify({email:String(data.get('email')).trim().toLowerCase(),until:Date.now()+60*60*1000}));
+    showRecoveryLink();return;
+  }
+  if(kind==='confirm-link'){
+    const token=form.emailToken || tokenFromResetLink(data.get('link'));
+    if(!token)throw new Error('Paste the complete link from your TEC email.');
+    const email=recoveryEmail();
+    await request('/api/auth/confirm','POST',email ? {token,recoveryEmail:email} : {token});
+    form.emailToken=''; if(form.elements.link)form.elements.link.value='';
+    if(email)showNewPassword(email);else await startMember();
+    return;
+  }
+  if(kind==='new-password'){
+    const password=data.get('password');
+    if([...password].length<12 || password.length>128)throw new Error('Use 12 to 128 characters.');
+    if(password!==data.get('confirm'))throw new Error('Your passwords do not match.');
+    await request('/api/auth/password','POST',{password,recoveryEmail:form.recoveryEmail});
+    localStorage.removeItem(recoveryKey);
+    form.reset();await startMember();toast('Your new password is saved.');return;
   }
   if(kind==='logout'){await request('/api/auth/signout','POST',{});resetSession();return;}
   if(!member)return;
@@ -215,8 +274,9 @@ document.addEventListener('click',async event=>{
   if(button.id==='signin-tec'){event.preventDefault();showLogin();return;}
   const d=button.dataset;
   if(d.action==='close-sheet'){modalRequest++;dialog.close();return;}
+  if(d.action==='have-link'){showRecoveryLink();return;}
   if(d.action==='recover'){
-    sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Reset password</h2><form data-form="recover"><label>TEC account email<input type="email" name="email" required></label>${errorLine}<button class="action full">Send reset email</button></form></div>`);return;
+    sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Reset password</h2><form data-form="recover"><label>TEC account email<input type="email" name="email" required></label>${errorLine}<button class="action full">Send reset email</button></form>${recoveryEmail() ? '<button class="small-link" data-action="have-link">I have a reset email</button>' : ''}</div>`);return;
   }
   if(!member)return;
   if(d.nav)go(d.nav);

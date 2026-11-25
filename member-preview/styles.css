@@ -242,7 +242,7 @@ h1,h2,h3,h4,.design-caption strong,.intro-motto,.app-motto{font-weight:400;font-
 .event-card { cursor: pointer; }
 
 
-dialog.media-dialog[open] {
+dialog[open] {
   position: fixed; inset: 0; margin: auto; width: min(440px, calc(100% - 24px));
   max-width: calc(100% - 24px); height: fit-content; max-height: calc(100dvh - 24px);
   border: 1px solid #353d4b; border-radius: 16px; overflow: auto; overscroll-behavior: contain;

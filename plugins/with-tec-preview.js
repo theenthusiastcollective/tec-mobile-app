@@ -19,11 +19,21 @@ module.exports = function withTecPreview(config) {
       $: {
         'android:name': activityName,
         'android:exported': 'true',
+        'android:launchMode': 'singleTop',
         'android:screenOrientation': 'portrait',
         'android:windowSoftInputMode': 'adjustResize',
         'android:theme': '@android:style/Theme.Material.NoActionBar'
       },
-      'intent-filter': filters.filter(launches)
+      'intent-filter': [...filters.filter(launches), {
+        $: {'android:autoVerify': 'true'},
+        action: [{$: {'android:name': 'android.intent.action.VIEW'}}],
+        category: ['DEFAULT', 'BROWSABLE'].map(name => ({$: {'android:name': 'android.intent.category.' + name}})),
+        data: [{$: {'android:scheme': 'https', 'android:host': 'teccarclub.com', 'android:path': '/android/reset'}}],
+        'uri-relative-filter-group': [{
+          $: {'android:allow': 'true'},
+          data: [{$: {'android:path': '/'}}, {$: {'android:fragmentPrefix': 'email-confirm/'}}]
+        }]
+      }]
     });
     return mod;
   });

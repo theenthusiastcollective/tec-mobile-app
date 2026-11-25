@@ -37,6 +37,7 @@ public final class MemberPreviewActivity extends ComponentActivity {
     private static final String MEMBER_ROOT = "/_tec-android/";
     private static final String MEMBER = "https://" + CLUB_HOST + MEMBER_ROOT + "member.html";
     private WebView web;
+    private String pendingEmailToken;
     private ValueCallback<Uri[]> pendingPhotos;
     private final ActivityResultLauncher<String> photoPicker = registerForActivityResult(
         new ActivityResultContracts.GetMultipleContents(), photos -> {
@@ -65,6 +66,13 @@ public final class MemberPreviewActivity extends ComponentActivity {
         web.getSettings().setAllowFileAccess(false);
         web.getSettings().setAllowContentAccess(false);
         web.setWebViewClient(new WebViewClient() {
+            @Override public void onPageFinished(WebView view, String url) {
+                if (MEMBER.equals(url) && MEMBER.equals(view.getUrl()) && pendingEmailToken != null) {
+                    String token = pendingEmailToken;
+                    pendingEmailToken = null;
+                    view.evaluateJavascript("window.tecReceiveEmailLink(" + org.json.JSONObject.quote(token) + ")", null);
+                }
+            }
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String path = uri.getPath();
@@ -115,7 +123,26 @@ public final class MemberPreviewActivity extends ComponentActivity {
                 });
             }
         });
-        if (saved == null || web.restoreState(saved) == null) web.loadUrl(HOME);
+        if (!openEmailLink(getIntent()) && (saved == null || web.restoreState(saved) == null)) web.loadUrl(HOME);
+    }
+
+    @Override protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        openEmailLink(intent);
+    }
+
+    private boolean openEmailLink(Intent intent) {
+        if (intent == null || !Intent.ACTION_VIEW.equals(intent.getAction())) return false;
+        Uri uri = intent.getData();
+        if (uri == null || !"https".equals(uri.getScheme()) || !CLUB_HOST.equals(uri.getEncodedAuthority())
+                || !("/".equals(uri.getEncodedPath()) || "/android/reset".equals(uri.getEncodedPath()))) return false;
+        String fragment = uri.getEncodedFragment();
+        if (fragment == null || !fragment.matches("email-confirm/[A-Za-z0-9_-]{32,256}")) return false;
+        pendingEmailToken = fragment.substring("email-confirm/".length());
+        intent.setData(null);
+        setIntent(new Intent(this, MemberPreviewActivity.class));
+        web.loadUrl(MEMBER);
+        return true;
     }
 
     private static boolean local(Uri uri) {
