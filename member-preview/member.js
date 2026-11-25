@@ -63,6 +63,16 @@ function recoveryEmail() {
   localStorage.removeItem(recoveryKey);
   return '';
 }
+function showRecoveryCode() {
+  const email = recoveryEmail();
+  if (!email) throw new Error('Request a new reset email.');
+  sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Enter verification code</h2>
+    <p>Enter the six-digit code sent to ${esc(email)}.</p>
+    <form data-form="confirm-code"><label>Verification code
+    <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></label>
+    ${errorLine}<button class="action full">Verify code</button></form>
+    <button class="small-link" data-action="recover">Request a new code</button></div>`, true);
+}
 function showRecoveryLink(token = '') {
   const email = recoveryEmail();
   const prompt = email ? `Continue to reset the password for ${esc(email)}.` : 'Continue only if you requested this TEC email.';
@@ -225,7 +235,13 @@ async function submitForm(form) {
   if(kind==='recover'){
     await request('/api/auth/email','POST',{email:data.get('email'),recovery:true});
     localStorage.setItem(recoveryKey, JSON.stringify({email:String(data.get('email')).trim().toLowerCase(),until:Date.now()+60*60*1000}));
-    showRecoveryLink();return;
+    showRecoveryCode();return;
+  }
+  if(kind==='confirm-code'){
+    const email=recoveryEmail();
+    if(!email)throw new Error('Request a new reset email.');
+    await request('/api/auth/recovery-code','POST',{email,code:data.get('code')});
+    form.reset();showNewPassword(email);return;
   }
   if(kind==='confirm-link'){
     const token=form.emailToken || tokenFromResetLink(data.get('link'));
@@ -295,9 +311,10 @@ document.addEventListener('click',async event=>{
   if(button.id==='signin-tec'){event.preventDefault();showLogin();return;}
   const d=button.dataset;
   if(d.action==='close-sheet'){modalRequest++;dialog.close();return;}
+  if(d.action==='have-code' && recoveryEmail()){showRecoveryCode();return;}
   if(d.action==='have-link'){showRecoveryLink();return;}
   if(d.action==='recover'){
-    sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Reset password</h2><form data-form="recover"><label>TEC account email<input type="email" name="email" required></label>${errorLine}<button class="action full">Send reset email</button></form>${recoveryEmail() ? '<button class="small-link" data-action="have-link">I have a reset email</button>' : ''}</div>`);return;
+    sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Reset password</h2><form data-form="recover"><label>TEC account email<input type="email" name="email" required></label>${errorLine}<button class="action full">Send verification code</button></form>${recoveryEmail() ? '<button class="small-link" data-action="have-code">I have a verification code</button>' : ''}</div>`);return;
   }
   if(!member)return;
   if(d.nav)go(d.nav);

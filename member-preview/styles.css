@@ -214,7 +214,7 @@ h1,h2,h3,h4,.design-caption strong,.intro-motto,.app-motto{font-weight:400;font-
 }
 .personal-vehicle img, .personal-vehicle svg { width: 100%; height: 64px; object-fit: contain; }
 .personal-vehicle svg, .garage-placeholder svg { padding: 14px; }
-.personal-vehicle span { display: block; padding: 5px; overflow-wrap: anywhere; }
+.personal-vehicle span { font-size: 12px; display: block; padding: 5px; overflow-wrap: anywhere; }
 .garage-placeholder { height: 100%; display: grid; place-items: center; background: var(--panel); }
 .garage-placeholder svg { width: 76px; height: 76px; }
 
