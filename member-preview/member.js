@@ -52,7 +52,7 @@ function showLogin(message='') {
     <form data-form="login"><label>Email<input type="email" name="email" autocomplete="username" required></label>
     <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
     <p role="alert" class="form-error">${esc(message)}</p><button class="action full">Sign in</button></form>
-    <button class="small-link" data-action="recover">Forgot password?</button></div>`);
+    <button class="small-link" data-action="recover">Forgot password?</button></div>`, true);
 }
 function setMember(profile) {
   member=profile.member;
