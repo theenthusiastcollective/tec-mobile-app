@@ -23,6 +23,10 @@ import android.widget.FrameLayout;
 import android.widget.Toast;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
+import java.io.FilterInputStream;
+import java.io.InputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.Collections;
 import java.util.Locale;
 
@@ -59,16 +63,22 @@ public final class MemberPreviewActivity extends ComponentActivity {
         web.getSettings().setAllowContentAccess(false);
         web.setWebViewClient(new WebViewClient() {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-                return resource(request.getUrl());
+                Uri uri = request.getUrl();
+                String path = uri.getPath();
+                if (local(uri) && "GET".equals(request.getMethod()) && path != null
+                        && (path.equals("/api/perks") || path.matches("/api/media/[A-Za-z0-9_-]+"))) {
+                    return publishedResource(path);
+                }
+                return resource(uri);
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 if (local(uri) && "/index.html".equals(uri.getPath())) return false;
                 if (request.isForMainFrame() && request.hasGesture() && "https".equals(uri.getScheme())
-                        && "teccarclub.com".equalsIgnoreCase(uri.getHost())) {
+                        && !local(uri) && uri.getHost() != null && uri.getUserInfo() == null) {
                     try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
                     catch (ActivityNotFoundException error) {
-                        Toast.makeText(MemberPreviewActivity.this, "Install a browser to open your TEC account.", Toast.LENGTH_LONG).show();
+                        Toast.makeText(MemberPreviewActivity.this, "Install a browser to open this link.", Toast.LENGTH_LONG).show();
                     }
                 }
                 return true;
@@ -99,6 +109,37 @@ public final class MemberPreviewActivity extends ComponentActivity {
 
     private static boolean local(Uri uri) {
         return "https".equals(uri.getScheme()) && HOST.equals(uri.getAuthority());
+    }
+
+    // Serve only the public offer feed and its images at the packaged app's origin.
+    private WebResourceResponse publishedResource(String path) {
+        HttpURLConnection connection = null;
+        try {
+            connection = (HttpURLConnection) new URL("https://teccarclub.com" + path).openConnection();
+            connection.setInstanceFollowRedirects(false);
+            connection.setUseCaches(false);
+            connection.setConnectTimeout(8000);
+            connection.setReadTimeout(12000);
+            boolean feed = path.equals("/api/perks");
+            connection.setRequestProperty("Accept", feed ? "application/json" : "image/*");
+            String type = connection.getContentType();
+            if (type != null) type = type.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
+            boolean valid = feed ? "application/json".equals(type)
+                    : ("image/jpeg".equals(type) || "image/png".equals(type) || "image/webp".equals(type));
+            if (connection.getResponseCode() == 200 && valid) {
+                final HttpURLConnection opened = connection;
+                InputStream body = new FilterInputStream(opened.getInputStream()) {
+                    @Override public void close() throws IOException {
+                        try { super.close(); } finally { opened.disconnect(); }
+                    }
+                };
+                return new WebResourceResponse(type, feed ? "UTF-8" : null, 200, "OK",
+                        Collections.singletonMap("Cache-Control", "no-store"), body);
+            }
+        } catch (IOException ignored) { /* Let the Perks page offer a retry. */ }
+        if (connection != null) connection.disconnect();
+        return new WebResourceResponse("text/plain", "UTF-8", 503, "Unavailable",
+                Collections.emptyMap(), new ByteArrayInputStream(new byte[0]));
     }
 
     private WebResourceResponse resource(Uri uri) {

@@ -39,16 +39,49 @@ function vehicleImage(vehicle) {
   return vehicle.image ? `<img src="${esc(vehicle.image)}" alt="${esc(vehicle.title)}">` : `<div class="garage-placeholder">${icon('garage')}</div>`;
 }
 function garage(){return `<section class="page">${previewLabel()}<h1 class="page-title">Your garage.</h1><p class="page-subtitle">Every build has a story.</p>${vehicles.map(v=>`<article class="vehicle-card"><div class="vehicle-cover">${vehicleImage(v)}<span class="vehicle-tag">${v.tags||'PREVIEW VEHICLE'}</span></div><div class="vehicle-copy"><p class="eyebrow">${esc(v.year)}</p><h2>${esc(v.title)}</h2><p>${esc(v.description)}</p><div class="vehicle-footer"><span>ONE SHARED PASSION</span><button class="action secondary" data-vehicle="${v.id}">View</button></div></div></article>`).join('')}<button class="action full" data-action="add-vehicle">Add vehicle</button><p class="page-subtitle" style="font-size:11px;margin-top:13px;text-align:center">Sample garage. Your real hub garage is unchanged.</p></section>`}
-function photoPage(){return `<section class="page">${previewLabel()}<h1 class="page-title">Through our lens.</h1><p class="page-subtitle">The cars. The people. The moments.</p><div class="upload-row"><small>ALL PHOTOS · PREVIEW</small><button class="action secondary" data-action="upload-photos">Add photos</button></div><input type="file" id="photo-input" accept="image/*" multiple hidden><div class="gallery-grid">${photos.map((src,i)=>`<button class="gallery-button" data-photo="${i}" aria-label="Open club photo ${i+1}"><img src="${src}" alt="A TEC club car photo" loading="lazy"></button>`).join('')}</div></section>`}
+function photoPage(){return `<section class="page">${previewLabel()}<h1 class="page-title">Member &amp; Event Gallery</h1><p class="page-subtitle">The cars. The people. The moments.</p><div class="upload-row"><small>ALL PHOTOS · PREVIEW</small><button class="action secondary" data-action="upload-photos">Add photos</button></div><input type="file" id="photo-input" accept="image/*" multiple hidden><div class="gallery-grid">${photos.map((src,i)=>`<button class="gallery-button" data-photo="${i}" aria-label="Open club photo ${i+1}"><img src="${src}" alt="A TEC club car photo" loading="lazy"></button>`).join('')}</div></section>`}
 function cruisePage() {
   return '<section class="page"><h1 class="page-title">Cruise</h1><p class="page-subtitle">Coming Soon</p></section>';
 }
+let publishedPerks = [];
+let perksRequest = 0;
+
 function perksPage() {
-  const offers = [['Outlaw Racing', '10% off labor for TEC members'], ['P1 Underground', 'Tuning'], ['Aligned Performance', 'Alignments and tires']];
-  return `<section class="page"><h1 class="page-title">Member Perks</h1>${offers.map(([name, benefit]) =>
-    `<div class="event-venue-details"><strong>${name}</strong><p>${benefit}</p></div>`).join('')}</section>`;
+  return '<section class="page"><h1 class="page-title">Member Perks</h1><div class="perk-list" id="perk-list" aria-live="polite">Loading offers…</div></section>';
 }
-function render(){nav();$('#app-main').innerHTML=({home,events:eventPage,cruise:cruisePage,perks:perksPage,garage,photos:photoPage})[view]();$('#app-scroll').scrollTop=0}
+async function loadPerks() {
+  const list = $('#perk-list');
+  if (!list) return;
+  const request = ++perksRequest;
+  try {
+    const response = await fetch('/api/perks', {cache:'no-store', credentials:'omit'});
+    if (!response.ok) throw new Error('Offer feed unavailable');
+    const data = await response.json();
+    if (!Array.isArray(data.perks)) throw new Error('Invalid offer feed');
+    if (request !== perksRequest || list !== $('#perk-list')) return;
+    publishedPerks = data.perks.filter(p => p && p.active && typeof p.business === 'string' && typeof p.title === 'string');
+    list.innerHTML = publishedPerks.length ? publishedPerks.map(p =>
+      `<button class="event-venue-details perk-button" data-perk="${esc(p.id)}" aria-haspopup="dialog"><strong>${esc(p.business)}</strong><span>${esc(p.title)}</span></button>`
+    ).join('') : 'No published offers at the moment.';
+  } catch {
+    if (request === perksRequest && list === $('#perk-list')) {
+      list.innerHTML = '<p>Offers could not load. Check your connection and try again.</p><button class="action" data-action="retry-perks">Try again</button>';
+    }
+  }
+}
+function showPerk(id) {
+  const p = publishedPerks.find(offer => offer.id === id);
+  if (!p) return;
+  const photo = /^\/api\/media\/[A-Za-z0-9_-]+$/.test(p.imageUrl || '') ?
+    `<img class="perk-photo" src="${esc(p.imageUrl)}" alt="${esc(p.business)} offer">` : '';
+  let website = '';
+  try {
+    const url = new URL(p.website);
+    if (url.protocol === 'https:' && !url.username && !url.password) website = `<a class="action secondary" href="${esc(url.href)}">Visit website</a>`;
+  } catch {}
+  sheet(`<div class="media-dialog-tools">${closeButton()}</div><div class="sheet-body perk-details"><p class="eyebrow">${esc(p.business)}</p><h2 id="sheet-title">${esc(p.title)}</h2>${photo}<p class="perk-terms">${esc(p.description)}</p>${website}</div>`, true);
+}
+function render(){nav();$('#app-main').innerHTML=({home,events:eventPage,cruise:cruisePage,perks:perksPage,garage,photos:photoPage})[view]();$('#app-scroll').scrollTop=0;if(view==='perks')loadPerks()}
 function go(next){if(!['home','events','cruise','perks','garage','photos'].includes(next))return;view=next;render()}
 function closeButton(){return '<button class="close" data-action="close-sheet">Close</button>'}
 let returnToEvent = null;
@@ -74,7 +107,7 @@ document.addEventListener('click',event=>{const button=event.target.closest('but
   const card=event.target.closest('.event-card');
   if(card)eventSheet(card.querySelector('[data-event]').dataset.event);
   return;
-}if(button.dataset.nav)go(button.dataset.nav);else if(button.dataset.event)eventSheet(button.dataset.event);else if(button.dataset.enlargeEvent){returnToEvent=button.dataset.enlargeEvent;flyerSheet(returnToEvent)}else if(button.dataset.flyer)flyerSheet(button.dataset.flyer);else if(button.dataset.memberGarage)vehicleSheet(button.dataset.memberGarage,true);else if(button.dataset.vehicle)vehicleSheet(button.dataset.vehicle);else if(button.dataset.filter){filter=button.dataset.filter;render()}else if(button.dataset.rsvp){rsvps[button.dataset.id]=button.dataset.rsvp;try{localStorage.setItem('tec-design-rsvp',JSON.stringify(rsvps))}catch{}const id=button.dataset.id;document.querySelectorAll('[data-rsvp]').forEach(node=>node.setAttribute('aria-pressed',String(node.dataset.rsvp===rsvps[id])));render();toast('Preview RSVP saved on this device.')}else if(button.dataset.photo!==undefined){const src=photos[Number(button.dataset.photo)];if(src)sheet(`<div class="media-dialog-tools">${closeButton()}</div><div class="lightbox"><h2 id="sheet-title" hidden>TEC club photo</h2><img src="${src}" alt="TEC club photo enlarged"><p>MEET. CRUISE. CONNECT.</p></div>`,true)}else{switch(button.dataset.action){case 'close-sheet':$('#sheet').close();break;case 'about':about();break;case 'updates':sheet(`<div class="about-sheet">${closeButton()}<p class="eyebrow">YOUR COLLECTIVE</p><h2 id="sheet-title">Stay in the loop.</h2><p>Event reminders and club updates would live here.</p><p>This screen is a design preview. Notifications aren’t enabled.</p><button class="action full" data-action="close-sheet">Got it</button></div>`);break;case 'upload-photos':$('#photo-input').click();break;case 'add-vehicle':sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Add vehicle.</h2><form id="vehicle-form"><label>Year & make<input name="year" required maxlength="50" placeholder="2017 Ford"></label><label>Model<input name="model" required maxlength="60" placeholder="Mustang GT"></label><label>Vehicle photo<input name="picture" type="file" accept="image/*"></label><label>The story<input name="story" maxlength="180" placeholder="What makes it yours?"></label><p>This adds a sample card in this preview. Your hub account stays unchanged.</p><button class="action full" type="submit">Add vehicle</button></form></div>`);break}}});
+}if(button.dataset.nav)go(button.dataset.nav);else if(button.dataset.perk)showPerk(button.dataset.perk);else if(button.dataset.action==='retry-perks')loadPerks();else if(button.dataset.event)eventSheet(button.dataset.event);else if(button.dataset.enlargeEvent){returnToEvent=button.dataset.enlargeEvent;flyerSheet(returnToEvent)}else if(button.dataset.flyer)flyerSheet(button.dataset.flyer);else if(button.dataset.memberGarage)vehicleSheet(button.dataset.memberGarage,true);else if(button.dataset.vehicle)vehicleSheet(button.dataset.vehicle);else if(button.dataset.filter){filter=button.dataset.filter;render()}else if(button.dataset.rsvp){rsvps[button.dataset.id]=button.dataset.rsvp;try{localStorage.setItem('tec-design-rsvp',JSON.stringify(rsvps))}catch{}const id=button.dataset.id;document.querySelectorAll('[data-rsvp]').forEach(node=>node.setAttribute('aria-pressed',String(node.dataset.rsvp===rsvps[id])));render();toast('Preview RSVP saved on this device.')}else if(button.dataset.photo!==undefined){const src=photos[Number(button.dataset.photo)];if(src)sheet(`<div class="media-dialog-tools">${closeButton()}</div><div class="lightbox"><h2 id="sheet-title" hidden>TEC club photo</h2><img src="${src}" alt="TEC club photo enlarged"><p>MEET. CRUISE. CONNECT.</p></div>`,true)}else{switch(button.dataset.action){case 'close-sheet':$('#sheet').close();break;case 'about':about();break;case 'updates':sheet(`<div class="about-sheet">${closeButton()}<p class="eyebrow">YOUR COLLECTIVE</p><h2 id="sheet-title">Stay in the loop.</h2><p>Event reminders and club updates would live here.</p><p>This screen is a design preview. Notifications aren’t enabled.</p><button class="action full" data-action="close-sheet">Got it</button></div>`);break;case 'upload-photos':$('#photo-input').click();break;case 'add-vehicle':sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Add vehicle.</h2><form id="vehicle-form"><label>Year & make<input name="year" required maxlength="50" placeholder="2017 Ford"></label><label>Model<input name="model" required maxlength="60" placeholder="Mustang GT"></label><label>Vehicle photo<input name="picture" type="file" accept="image/*"></label><label>The story<input name="story" maxlength="180" placeholder="What makes it yours?"></label><p>This adds a sample card in this preview. Your hub account stays unchanged.</p><button class="action full" type="submit">Add vehicle</button></form></div>`);break}}});
 // Keep the member's preview uploads on this device, including the original image files.
 const storage = new Promise((resolve, reject) => {
   const request = indexedDB.open('tec-member-preview', 1);
