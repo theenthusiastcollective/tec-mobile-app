@@ -29,8 +29,11 @@
         "foregroundImage": "./assets/tec-app-icon-metallic.png",
         "backgroundColor": "#050608"
       },
-      "permissions": [
-        "READ_MEDIA_IMAGES"
+      "blockedPermissions": [
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ]
     },
     "ios": {
