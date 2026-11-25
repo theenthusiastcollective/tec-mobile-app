@@ -22,6 +22,9 @@
       "autoIncrement": true,
       "android": {
         "buildType": "app-bundle"
+      },
+      "env": {
+        "TEC_MEMBER_PREVIEW": "1"
       }
     }
   },
