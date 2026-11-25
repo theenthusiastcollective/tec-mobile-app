@@ -52,7 +52,27 @@ function showLogin(message='') {
     <form data-form="login"><label>Email<input type="email" name="email" autocomplete="username" required></label>
     <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
     <p role="alert" class="form-error">${esc(message)}</p><button class="action full">Sign in</button></form>
-    <button class="small-link" data-action="recover">Forgot password?</button></div>`, true);
+    <button class="small-link" data-action="recover">Forgot password?</button> <button class="small-link" data-action="registration-code">I have a signup code</button></div>`, true);
+}
+function showRegistration() {
+  sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Create a TEC account</h2>
+    <form data-form="register">
+      <label>Display name<input name="displayName" autocomplete="nickname" maxlength="80" required></label>
+      <label>Email<input type="email" name="email" autocomplete="email" required></label>
+      <label>Password<input type="password" name="password" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+      <label>Confirm password<input type="password" name="confirm" autocomplete="new-password" minlength="12" maxlength="128" required></label>
+      <label><input type="checkbox" name="localParticipationAgreement" required>
+        I confirm that I live in the Palm Beaches, Martin County, St. Lucie County, or the surrounding area, and plan to participate in TEC group activities.
+      </label>
+      ${errorLine}<button class="action full">Create account</button>
+    </form><p><a href="https://teccarclub.com/privacy.html">Privacy Policy</a></p></div>`, true);
+}
+function showRegistrationCode(email) {
+  sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Confirm your email</h2>
+    <p>Enter the six-digit code from your TEC signup email.</p>
+    <form data-form="confirm-registration"><label>Email<input type="email" name="email" value="${esc(email)}" required></label>
+    <label>Verification code<input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="6" pattern="[0-9]{6}" required></label>
+    ${errorLine}<button class="action full">Verify email</button></form></div>`, true);
 }
 const recoveryKey = 'tec-password-request';
 function recoveryEmail() {
@@ -228,6 +248,20 @@ async function upload(file,kind) {
 }
 async function submitForm(form) {
   const data=new FormData(form), id=form.dataset.id, kind=form.dataset.form;
+  if(kind==='register'){
+    const email=String(data.get('email')).trim().toLowerCase(), password=data.get('password');
+    if(password!==data.get('confirm'))throw new Error('Your passwords do not match.');
+    const result=await request('/api/auth/signup','POST',{
+      email,password,displayName:data.get('displayName'),localParticipationAgreement:data.has('localParticipationAgreement')
+    });
+    form.reset();
+    if(result.signedIn){await startMember();return;}
+    showRegistrationCode(email);return;
+  }
+  if(kind==='confirm-registration'){
+    await request('/api/auth/recovery-code','POST',{email:data.get('email'),code:data.get('code')});
+    form.reset();await startMember();return;
+  }
   if(kind==='login'){
     await request('/api/auth/password-signin','POST',{email:data.get('email'),password:data.get('password')});
     localStorage.removeItem(recoveryKey);form.elements.password.value='';await startMember();return;
@@ -308,9 +342,11 @@ document.addEventListener('click',async event=>{
     if(member && link)await showEvent(link.dataset.event);
     return;
   }
+  if(button.id==='register-tec'){event.preventDefault();showRegistration();return;}
   if(button.id==='signin-tec'){event.preventDefault();showLogin();return;}
   const d=button.dataset;
   if(d.action==='close-sheet'){modalRequest++;dialog.close();return;}
+  if(d.action==='registration-code'){showRegistrationCode('');return;}
   if(d.action==='have-code' && recoveryEmail()){showRecoveryCode();return;}
   if(d.action==='have-link'){showRecoveryLink();return;}
   if(d.action==='recover'){
@@ -330,7 +366,7 @@ document.addEventListener('click',async event=>{
   else if(d.action==='refresh')await refresh();
   else if(d.action==='add-vehicle')vehicleForm();
   else if(d.action==='photo-upload')sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Add photos</h2><form data-form="photos"><label>Gallery photos<input name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>${errorLine}<button class="action full">Upload photos</button></form></div>`);
-  else if(d.action==='about')sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">${esc(member.name)}</h2><form data-form="logout">${errorLine}<button class="action secondary full">Sign out</button></form></div>`);
+  else if(d.action==='about')sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">${esc(member.name)}</h2><form data-form="logout">${errorLine}<button class="action secondary full">Sign out</button></form><p><a href="https://teccarclub.com/privacy.html">Privacy Policy</a></p></div>`);
   else if(d.action==='updates'){
     const token=++modalRequest;
     try{const {announcements}=await request('/api/announcements');if(token===modalRequest&&member)sheet(`<div class="sheet-body">${closeButton()}<h2 id="sheet-title">Notifications</h2>${announcements.map(a=>`<h3>${esc(a.title)}</h3><p>${esc(a.body)}</p>`).join('')||'<p>No new announcements.</p>'}</div>`);}
