@@ -120,7 +120,11 @@ async function refresh() {
     const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
     events=listing.events.map(asEvent).filter(e=>e && e.status!=='cancelled' && (e.end?Date.parse(e.end)>=Date.now():e.isoDate>=today)).sort((a,b)=>Date.parse(a.start)-Date.parse(b.start));
     rsvps=Object.fromEntries(events.filter(e=>e.myRsvp).map(e=>[e.id,statusLabels[e.myRsvp.status]]));
-    memberGarages=garages.members.flatMap(owner=>owner.vehicles.map(row=>asVehicle(row,owner.name,false)));
+    memberGarages = garages.members.filter(owner => owner.vehicles.length).map(owner => {
+      const garageVehicles = owner.vehicles.map(row => asVehicle(row, owner.name, false));
+      const cover = garageVehicles.find(vehicle => vehicle.image) || garageVehicles[0];
+      return {...cover, id: owner.id, vehicles: garageVehicles};
+    });
     photos=gallery.photos.filter(photo=>clubImage(photo.url));
   } catch(error) {
     if(token===revision) dataError=error.message;
@@ -156,6 +160,23 @@ function vehicleForm(v={}) {
     <label>What Makes It Special<textarea name="mods" maxlength="1800">${esc(v.mods)}</textarea></label>
     <label>Vehicle photo<input type="file" name="photo" accept="image/jpeg,image/png,image/webp"></label>${errorLine}
     <button class="action full">Save vehicle</button></form></div>`);
+}
+function showMemberGarage(id) {
+  const garage = memberGarages.find(entry => entry.id === id);
+  if (!garage) return;
+  const cards = garage.vehicles.map(vehicle => `
+    <article class="vehicle-card">
+      <div class="vehicle-cover">${vehicleImage(vehicle)}</div>
+      <div class="vehicle-copy">
+        <h3>${esc(vehicle.title)}</h3>
+        ${vehicle.color ? `<p>${esc(vehicle.color)}</p>` : ''}
+        ${vehicle.mods ? `<p>${esc(vehicle.mods)}</p>` : ''}
+      </div>
+    </article>`).join('');
+  sheet(`<div class="media-dialog-tools">${closeButton()}</div>
+    <div class="sheet-body member-garage-body">
+      <h2 id="sheet-title">${esc(garage.owner)}’s Garage</h2>${cards}
+    </div>`, true);
 }
 function vehicleDetails(v) {
   if(!v)return;
@@ -284,7 +305,7 @@ document.addEventListener('click',async event=>{
   else if(d.event)await showEvent(d.event);
   else if(d.flyer){const e=events.find(e=>e.id===d.flyer);if(e)imageView(e.title,e.thumbnail);}
   else if(d.vehicle)vehicleDetails(vehicles.find(v=>v.id===d.vehicle));
-  else if(d.memberGarage)vehicleDetails(memberGarages.find(v=>v.id===d.memberGarage));
+  else if(d.memberGarage) showMemberGarage(d.memberGarage);
   else if(d.edit)vehicleForm(vehicles.find(v=>v.id===d.edit));
   else if(d.photo!==undefined){const p=photos[Number(d.photo)];if(p)imageView(p.caption||'Club photo',p.url);}
   else if(d.perk)showPerk(d.perk);
