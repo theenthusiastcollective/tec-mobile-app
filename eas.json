@@ -11,11 +11,18 @@
     "preview": {
       "distribution": "internal",
       "autoIncrement": true,
-      "android": { "buildType": "apk" }
+      "android": {
+        "buildType": "apk"
+      },
+      "env": {
+        "TEC_MEMBER_PREVIEW": "1"
+      }
     },
     "production": {
       "autoIncrement": true,
-      "android": { "buildType": "app-bundle" }
+      "android": {
+        "buildType": "app-bundle"
+      }
     }
   },
   "submit": {

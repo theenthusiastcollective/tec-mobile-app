@@ -7,7 +7,9 @@
     "orientation": "portrait",
     "icon": "./assets/tec-app-icon-metallic.png",
     "userInterfaceStyle": "dark",
-    "assetBundlePatterns": ["assets/**/*"],
+    "assetBundlePatterns": [
+      "assets/**/*"
+    ],
     "plugins": [
       [
         "expo-splash-screen",
@@ -17,7 +19,8 @@
           "backgroundColor": "#050608"
         }
       ],
-      "expo-image-picker"
+      "expo-image-picker",
+      "./plugins/with-tec-preview"
     ],
     "android": {
       "package": "com.teccarclub.app",
@@ -26,7 +29,9 @@
         "foregroundImage": "./assets/tec-app-icon-metallic.png",
         "backgroundColor": "#050608"
       },
-      "permissions": ["READ_MEDIA_IMAGES"]
+      "permissions": [
+        "READ_MEDIA_IMAGES"
+      ]
     },
     "ios": {
       "bundleIdentifier": "com.teccarclub.app",

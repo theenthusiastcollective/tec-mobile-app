@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#090b0e"><meta name="description" content="A private visual preview of the next TEC member app."><title>TEC — App Design Preview</title><link rel="icon" href="assets/tec-app-192.png"><link rel="preload" href="assets/michroma-regular.woff" as="font" type="font/woff" crossorigin><link rel="stylesheet" href="styles.css?v=12"><script defer src="app.js?v=12"></script></head>
+<body>
+<main class="launch-screen" id="tec-splash" aria-label="Welcome to The Enthusiast Collective">
+ <div class="launch-art" aria-hidden="true"><img src="assets/tec-splash-corvette.webp" alt="" fetchpriority="high" decoding="async"></div>
+ <div class="launch-brand"><img class="launch-logo" src="assets/tec-logo-transparent.png" alt="The Enthusiast Collective — Meet. Cruise. Connect."><h1 class="launch-slogan"><span>South Florida's</span> <strong>Auto Enthusiast</strong> <span>Social Network</span></h1></div>
+ <div class="launch-space" aria-hidden="true"></div>
+ <div class="launch-bottom"><div class="launch-actions"><a class="launch-enter launch-register" id="register-tec" href="https://teccarclub.com/#register">REGISTER</a><a class="launch-enter launch-signin" id="signin-tec" href="https://teccarclub.com/#signin">SIGN IN</a></div><a class="launch-preview" id="preview-tec" href="#app">Explore the app preview</a></div>
+</main>
+<div class="preview-shell" id="member-app" hidden>
+ <aside class="design-intro"><p class="edition">THE MEMBER APP · DESIGN STUDY 01</p><h1>Your collective.<br><em>In your pocket.</em></h1><p class="intro-copy">South Florida’s automotive enthusiast social network.</p><div class="intro-photo"><img src="assets/tec-splash-10.webp" alt="A black Mercedes at a TEC car meet"><span>ALL MAKES. ALL MODELS.<br><strong>ONE SHARED PASSION.</strong></span></div><p class="intro-note">An interactive look at the direction.<br>Explore the tabs. Open an event. Make it yours.</p><div class="intro-motto"><span>MEET.</span> <span>CRUISE.</span> <span>CONNECT.</span></div></aside>
+ <div class="app-frame">
+  <div class="app-scroll" id="app-scroll" tabindex="0" aria-label="App content">
+  <header class="app-header"><button class="brand-button" data-nav="home" aria-label="The Enthusiast Collective home"><img src="assets/tec-logo.jpg" alt="The Enthusiast Collective — Meet. Cruise. Connect."></button><div class="header-actions"><button class="icon-button" data-action="updates" aria-label="Notifications"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9M10 21h4"/></svg></button><button class="avatar" data-action="about" aria-label="About this design preview"><span class="account-mark" aria-hidden="true">T</span></button></div></header>
+  <main id="app-main" tabindex="-1"></main>
+  </div>
+  <nav class="tabbar" aria-label="App navigation"></nav>
+ </div>
+ <aside class="design-caption"><span class="caption-rule"></span><p>01 / TEC MEMBER APP</p><strong>Built around<br>the people.</strong><p>Events. Garages. Connections.<br>One place for your collective.</p></aside>
+</div>
+<dialog id="sheet" aria-labelledby="sheet-title"><div id="sheet-content"></div></dialog>
+<div id="toast" role="status" aria-live="polite"></div>
+</body></html>
