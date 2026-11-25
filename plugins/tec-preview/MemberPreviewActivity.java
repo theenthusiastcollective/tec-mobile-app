@@ -33,6 +33,9 @@ import java.util.Locale;
 public final class MemberPreviewActivity extends ComponentActivity {
     private static final String HOST = "appassets.androidplatform.net";
     private static final String HOME = "https://" + HOST + "/index.html";
+    private static final String CLUB_HOST = "teccarclub.com";
+    private static final String MEMBER_ROOT = "/_tec-android/";
+    private static final String MEMBER = "https://" + CLUB_HOST + MEMBER_ROOT + "member.html";
     private WebView web;
     private ValueCallback<Uri[]> pendingPhotos;
     private final ActivityResultLauncher<String> photoPicker = registerForActivityResult(
@@ -65,6 +68,13 @@ public final class MemberPreviewActivity extends ComponentActivity {
             @Override public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
                 String path = uri.getPath();
+                if ("https".equals(uri.getScheme()) && CLUB_HOST.equals(uri.getAuthority()) && path != null) {
+                    if ("GET".equals(request.getMethod()) && path.startsWith(MEMBER_ROOT)) {
+                        return packaged(path.substring(MEMBER_ROOT.length() - 1));
+                    }
+                    // Let WebView handle HTTPS, request bodies and the club's HttpOnly session cookies.
+                    if (!request.isForMainFrame() && (path.startsWith("/api/") || path.startsWith("/assets/"))) return null;
+                }
                 if (local(uri) && "GET".equals(request.getMethod()) && path != null
                         && (path.equals("/api/perks") || path.matches("/api/media/[A-Za-z0-9_-]+"))) {
                     return publishedResource(path);
@@ -73,7 +83,8 @@ public final class MemberPreviewActivity extends ComponentActivity {
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
-                if (local(uri) && "/index.html".equals(uri.getPath())) return false;
+                if (MEMBER.equals(uri.toString()) || HOME.equals(uri.toString())
+                        || (local(uri) && "/index.html".equals(uri.getPath()))) return false;
                 if (request.isForMainFrame() && request.hasGesture() && "https".equals(uri.getScheme())
                         && !local(uri) && uri.getHost() != null && uri.getUserInfo() == null) {
                     try { startActivity(new Intent(Intent.ACTION_VIEW, uri)); }
@@ -97,7 +108,7 @@ public final class MemberPreviewActivity extends ComponentActivity {
             @Override public void handleOnBackPressed() {
                 web.evaluateJavascript("(function(){const dialog=document.querySelector('dialog[open]');"
                         + "if(dialog){dialog.close();return true;}"
-                        + "if(location.hash==='#app' && typeof view!=='undefined' && view!=='home'){go('home');return true;}"
+                        + "if((location.hash==='#app' || location.pathname==='/_tec-android/member.html') && typeof view!=='undefined' && view!=='home'){go('home');return true;}"
                         + "return false;})()", handled -> {
                     if ("true".equals(handled)) return;
                     if (web.canGoBack()) web.goBack(); else finish();
@@ -144,7 +155,11 @@ public final class MemberPreviewActivity extends ComponentActivity {
 
     private WebResourceResponse resource(Uri uri) {
         String path = uri.getPath();
-        if (local(uri) && path != null && path.matches("/(?:assets/)?[A-Za-z0-9_-]+\\.[A-Za-z0-9]+")) {
+        return packaged(local(uri) ? path : null);
+    }
+
+    private WebResourceResponse packaged(String path) {
+        if (path != null && path.matches("/(?:assets/)?[A-Za-z0-9_-]+\\.[A-Za-z0-9]+")) {
             try {
                 String ext = path.substring(path.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT);
                 String type;

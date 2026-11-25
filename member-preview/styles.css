@@ -264,3 +264,8 @@ dialog.media-dialog[open] {
 .perk-button span { display: block; margin-top: 6px; line-height: 1.5; color: #aab4c3; }
 .perk-details .perk-terms { white-space: pre-line; overflow-wrap: anywhere; }
 .perk-photo { width: 100%; max-height: 38dvh; object-fit: contain; }
+
+.member-rsvp label{display:block;margin:12px 0;font-size:14px;color:var(--text)}
+.member-rsvp select,.member-rsvp input:not([type=checkbox]),.form-sheet textarea{display:block;width:100%;margin-top:5px;padding:10px;background:var(--panel);color:var(--text);border:1px solid #454a53;border-radius:6px;font:inherit}
+.form-sheet textarea{min-height:5em}
+.form-error[role=alert]:not(:empty){color:#ffb8b8}

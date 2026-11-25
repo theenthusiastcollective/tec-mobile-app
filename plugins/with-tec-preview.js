@@ -38,6 +38,8 @@ module.exports = function withTecPreview(config) {
       path.join(codeDir, 'MemberPreviewActivity.java'));
     await fs.rm(assets, { recursive: true, force: true });
     await fs.cp(path.join(root, 'member-preview'), assets, { recursive: true });
+    const shell = await fs.readFile(path.join(assets, 'index.html'), 'utf8');
+    await fs.writeFile(path.join(assets, 'member.html'), shell.replace('src="app.js?v=12"', 'src="member.js"'));
     return mod;
   }]);
 };

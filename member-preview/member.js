@@ -1,0 +1,246 @@
+'use strict';
+const isMemberApp = true;
+const statusLabels = {going:'Going', interested:'Interested', declined:'Can’t make it'};
+const previewLabel = () => '';
+const firstName = () => member.name.trim().split(/\s+/)[0];
+let member = null, vehicles = [], memberGarages = [], events = [], photos = [];
+let rsvps = {}, view = 'home', filter = 'all', toastTimer, revision = 0, modalRequest = 0;
+let dataError = '', loading = false;
+const splash = $('#tec-splash'), shell = $('#member-app'), dialog = $('#sheet');
+const errorLine = '<p role="alert" class="form-error"></p>';
+const clubImage = path => /^\/(?:assets\/[a-zA-Z0-9_.%/-]+|api\/media\/[A-Za-z0-9_-]+)$/.test(path || '') && !path.includes('..') ? path : '';
+const pathFor = id => '/api/events/' + encodeURIComponent(id);
+const selected = (a,b) => a === b ? ' selected' : '';
+function asVehicle(row, owner, personal) {
+  return {...row, owner, personal, title:[row.year,row.make,row.model].filter(Boolean).join(' '), image:clubImage(row.imageUrl)};
+}
+function asEvent(row) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(row.date)) return null;
+  const date = new Date(row.date + 'T12:00:00Z');
+  if (Number.isNaN(+date)) return null;
+  const format = options => date.toLocaleDateString('en-US',{...options,timeZone:'UTC'});
+  return {...row,isoDate:row.date,weekday:format({weekday:'short'}),dayName:format({weekday:'long'}),
+    day:row.date.slice(8),month:format({month:'short'}),monthName:format({month:'long'}),year:row.date.slice(0,4),
+    dateLabel:format({dateStyle:'full'}),thumbnail:clubImage(row.imageUrl),short:row.type,startLabel:row.time,
+    location:row.venue?.name || row.city,address:row.venue?.address || '',stops:row.stops || []};
+}
+async function request(path, method='GET', body) {
+  const options = {method,credentials:'same-origin',cache:'no-store',headers:{Accept:'application/json'}};
+  if (method !== 'GET') options.headers['x-tec-request']='1';
+  if (body instanceof FormData) options.body=body;
+  else if (body !== undefined) {
+    options.headers['Content-Type']='application/json';
+    options.body=JSON.stringify(body);
+  }
+  const response=await fetch(path,options);
+  const data=await response.json().catch(()=>null);
+  if (!response.ok || !data) {
+    if (response.status===401 && member) resetSession('Please sign in again.');
+    throw new Error(data?.error || 'TEC could not complete the request. Please try again.');
+  }
+  return data;
+}
+function resetSession(message='') {
+  revision++; modalRequest++; member=null; vehicles=[]; events=[]; photos=[]; memberGarages=[]; rsvps={};
+  dataError=''; loading=false; view='home'; filter='all'; publishedPerks=[];
+  dialog.close(); $('#sheet-content').replaceChildren(); $('#app-main').replaceChildren();
+  shell.hidden=true; splash.hidden=false;
+  showLogin(message);
+}
+function showLogin(message='') {
+  sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Member sign in</h2>
+    <form data-form="login"><label>Email<input type="email" name="email" autocomplete="username" required></label>
+    <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+    <p role="alert" class="form-error">${esc(message)}</p><button class="action full">Sign in</button></form>
+    <button class="small-link" data-action="recover">Forgot password?</button></div>`);
+}
+function setMember(profile) {
+  member=profile.member;
+  vehicles=profile.vehicles.map(row=>asVehicle(row,member.name,true));
+  $('.account-mark').textContent=firstName().slice(0,1).toUpperCase();
+  $('.avatar').setAttribute('aria-label','Member account');
+  splash.hidden=true; shell.hidden=false;
+}
+async function startMember() {
+  const token=++revision;
+  const profile=await request('/api/me');
+  if (token!==revision) return;
+  if (!profile.member) {resetSession(profile.membershipRemoved?'This membership is no longer active.':'');return;}
+  dialog.close(); setMember(profile); await refresh();
+}
+async function refresh() {
+  const token=++revision;
+  loading=true; dataError=''; render();
+  try {
+    const [profile,listing,garages,gallery]=await Promise.all(['/api/me','/api/events','/api/garage','/api/gallery'].map(path=>request(path)));
+    if (token!==revision) return;
+    if (profile.member?.id!==member?.id) {resetSession('Please sign in to your account.');return;}
+    setMember(profile);
+    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
+    events=listing.events.map(asEvent).filter(e=>e && e.status!=='cancelled' && (e.end?Date.parse(e.end)>=Date.now():e.isoDate>=today)).sort((a,b)=>Date.parse(a.start)-Date.parse(b.start));
+    rsvps=Object.fromEntries(events.filter(e=>e.myRsvp).map(e=>[e.id,statusLabels[e.myRsvp.status]]));
+    memberGarages=garages.members.flatMap(owner=>owner.vehicles.map(row=>asVehicle(row,owner.name,false)));
+    photos=gallery.photos.filter(photo=>clubImage(photo.url));
+  } catch(error) {
+    if(token===revision) dataError=error.message;
+  } finally {
+    if(token===revision) {loading=false;render();}
+  }
+}
+function garagePage() {
+  return `<section class="page"><h1 class="page-title">Your Garage</h1>${vehicles.map(v=>`<article class="vehicle-card"><div class="vehicle-cover">${vehicleImage(v)}</div><div class="vehicle-copy"><h2>${esc(v.title)}</h2><p>${esc(v.mods)}</p><button class="action secondary" data-vehicle="${esc(v.id)}">View</button></div></article>`).join('')}
+    <button class="action full" data-action="add-vehicle">${vehicles.length?'Add vehicle':'Create Garage'}</button>
+    <div class="section-head garage-section-heading"><h2>Member Garages</h2></div><div class="build-row">${memberGarages.map(buildTile).join('')}</div></section>`;
+}
+function galleryPage() {
+  return `<section class="page"><h1 class="page-title">Member &amp; Event Gallery</h1><div class="upload-row"><small>All photos</small><button class="action secondary" data-action="photo-upload">Add photos</button></div><div class="gallery-grid">${photos.map((p,i)=>`<button class="gallery-button" data-photo="${i}" aria-label="Open photo ${i+1}"><img src="${esc(p.url)}" alt="${esc(p.caption||'TEC member photo')}" loading="lazy"></button>`).join('')}</div></section>`;
+}
+const views={home,events:eventPage,garage:garagePage,photos:galleryPage,cruise:cruisePage,perks:perksPage};
+function render() {
+  if (!member) return;
+  nav();
+  const status=dataError?`<p class="empty-state" role="alert">${esc(dataError)} <button class="action" data-action="refresh">Retry</button></p>`:'';
+  $('#app-main').innerHTML=status+(loading&&!events.length&&!vehicles.length?'<p class="empty-state" role="status">Loading your membership…</p>':views[view]());
+  if(view==='perks')loadPerks();
+}
+function go(next) {
+  if(!Object.hasOwn(views,next))return;
+  view=next;render();$('#app-scroll').scrollTop=0;
+}
+function vehicleForm(v={}) {
+  const field=(name,title,max)=>`<label>${title}<input name="${name}" maxlength="${max}" value="${esc(v[name])}" ${name==='color'?'':'required'}></label>`;
+  sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">${v.id?'Edit vehicle':'Add vehicle'}</h2><form data-form="vehicle" data-id="${esc(v.id)}">
+    <label>Year<input type="number" name="year" min="1900" max="${new Date().getFullYear()+2}" value="${esc(v.year)}" required></label>
+    ${field('make','Make',60)}${field('model','Model',100)}${field('color','Color',50)}
+    <label>What Makes It Special<textarea name="mods" maxlength="1800">${esc(v.mods)}</textarea></label>
+    <label>Vehicle photo<input type="file" name="photo" accept="image/jpeg,image/png,image/webp"></label>${errorLine}
+    <button class="action full">Save vehicle</button></form></div>`);
+}
+function vehicleDetails(v) {
+  if(!v)return;
+  sheet(`<div class="sheet-cover">${vehicleImage(v)}${closeButton()}</div><div class="sheet-body"><p class="eyebrow">${esc(v.owner)}’s Garage</p><h2 id="sheet-title">${esc(v.title)}</h2><p>${esc(v.color)}</p><p>${esc(v.mods)}</p>${v.personal?`<button class="action full" data-edit="${esc(v.id)}">Edit vehicle</button>`:''}</div>`,true);
+}
+function imageView(title,url) {
+  if(!url)return;
+  sheet(`<div class="media-dialog-tools">${closeButton()}</div><div class="lightbox event-flyer-lightbox"><h2 id="sheet-title">${esc(title)}</h2><img src="${esc(url)}" alt="${esc(title)}"></div>`,true);
+}
+function rsvpForm(e,mine) {
+  const stops=e.stops.filter(s=>s.join);
+  if(!stops.length||e.status==='cancelled')return '<p>RSVP is unavailable for this event.</p>';
+  return `<form class="member-rsvp" data-form="rsvp" data-id="${esc(e.id)}"><h3>Your plan</h3>
+    <label>RSVP<select name="status" required><option value="">Choose a response</option>${Object.entries(statusLabels).map(([k,v])=>`<option value="${k}"${selected(k,mine?.status)}>${v}</option>`).join('')}</select></label>
+    <label>Join at<select name="joinStop" required>${stops.map(s=>`<option value="${esc(s.id)}"${selected(s.id,mine?.join_stop)}>${esc(s.name)}</option>`).join('')}</select></label>
+    <label>Vehicle<select name="vehicleId"><option value="">No vehicle selected</option>${vehicles.map(v=>`<option value="${esc(v.id)}"${selected(v.id,mine?.vehicle_id)}>${esc(v.title)}</option>`).join('')}</select></label>
+    <label>Guests<input type="number" min="0" max="10" name="guests" value="${esc(mine?.guests||0)}" required></label>
+    <label><input type="checkbox" name="reminder" ${mine?.reminder?'checked':''}> Send me a reminder</label>${errorLine}
+    <button class="action full">Save RSVP</button></form>`;
+}
+async function showEvent(id) {
+  const token=++modalRequest;
+  sheet(`<div class="sheet-body">${closeButton()}<h2 id="sheet-title">Event details</h2><p>Loading event…</p></div>`,true);
+  try {
+    const detail=await request(pathFor(id));
+    if(token!==modalRequest||!dialog.open||!member)return;
+    const e=asEvent(detail.event);
+    const flyer=e.thumbnail?`<button class="detail-flyer" data-flyer="${esc(id)}"><img src="${esc(e.thumbnail)}" alt="${esc(e.title)}"><span>Tap flyer to enlarge</span></button>`:'';
+    sheet(`<div class="media-dialog-tools">${closeButton()}</div>${flyer}<div class="sheet-body"><p class="eyebrow">${esc(e.type)}</p><h2 id="sheet-title">${esc(e.title)}</h2><p>${esc(e.dateLabel)} · ${esc(e.time)}</p><p>${esc(e.description)}</p><div class="event-venue-details"><strong>${esc(e.location)}</strong><p>${esc(e.address)}</p></div>
+      ${rsvpForm(e,detail.myRsvp)}<h3>The day at a glance</h3><ol class="itinerary">${e.stops.map(s=>`<li><time>${esc(s.time)}<small>${esc(s.period)}</small></time><div><strong>${esc(s.name)}</strong><p>${esc(s.note)}</p></div></li>`).join('')}</ol></div>`,true);
+  } catch(error) {
+    if(token===modalRequest&&dialog.open&&member)sheet(`<div class="sheet-body">${closeButton()}<h2 id="sheet-title">Event details</h2><p>${esc(error.message)}</p><button class="action" data-event="${esc(id)}">Retry</button></div>`,true);
+  }
+}
+async function upload(file,kind) {
+  if(file.size>5*1024*1024)throw new Error('Choose a JPEG, PNG or WebP under 5 MB.');
+  const body=new FormData();body.set('file',file);body.set('kind',kind);
+  return request('/api/uploads','POST',body);
+}
+async function submitForm(form) {
+  const data=new FormData(form), id=form.dataset.id, kind=form.dataset.form;
+  if(kind==='login'){
+    await request('/api/auth/password-signin','POST',{email:data.get('email'),password:data.get('password')});
+    form.elements.password.value='';await startMember();return;
+  }
+  if(kind==='recover'){
+    await request('/api/auth/email','POST',{email:data.get('email'),recovery:true});
+    showLogin('Check your email for password reset instructions.');return;
+  }
+  if(kind==='logout'){await request('/api/auth/signout','POST',{});resetSession();return;}
+  if(!member)return;
+  if(kind==='vehicle'){
+    const vehicle=vehicles.find(v=>v.id===id);
+    let imageId=vehicle?.image_id||null;
+    const photo=form.elements.photo.files[0];
+    if(photo){
+      if(form.uploadedFile!==photo){
+        const saved=await upload(photo,'garage');
+        form.uploadedFile=photo; form.uploadedId=saved.id;
+      }
+      imageId=form.uploadedId;
+    }
+    const {year,make,model,color,mods}=Object.fromEntries(data);
+    await request('/api/vehicles'+(id?'/'+encodeURIComponent(id):''),id?'PUT':'POST',{year:Number(year),make,model,color,mods,imageId});
+    dialog.close();toast('Vehicle saved to your TEC garage.');await refresh();
+  }
+  if(kind==='rsvp'){
+    const {status,joinStop,vehicleId,guests}=Object.fromEntries(data);
+    const result=await request(pathFor(id)+'/rsvp','PUT',{status,joinStop,vehicleId:vehicleId||null,guests:Number(guests),reminder:data.has('reminder')});
+    rsvps[id]=statusLabels[result.myRsvp.status];dialog.close();render();toast('Your RSVP is saved.');
+  }
+  if(kind==='photos'){
+    const files=[...form.elements.photos.files];
+    for(const file of files){
+      if(!form.sentFiles)form.sentFiles=new Set();
+      if(form.sentFiles.has(file))continue;
+      await upload(file,'gallery');form.sentFiles.add(file);
+    }
+    dialog.close();toast('Photos submitted to the club gallery.');await refresh();
+  }
+}
+document.addEventListener('submit',async event=>{
+  event.preventDefault();const form=event.target;
+  if(!form.dataset.form||form.dataset.saving)return;
+  form.dataset.saving='1';const submit=form.querySelector('button');submit.disabled=true;
+  try{await submitForm(form);}
+  catch(error){form.querySelector('.form-error').textContent=error.message;}
+  finally{delete form.dataset.saving;submit.disabled=false;}
+});
+document.addEventListener('click',async event=>{
+  const button=event.target.closest('button,a');
+  if(!button){
+    const ticket=event.target.closest('.event-ticket');
+    const link=ticket?.querySelector('[data-event]');
+    if(member && link)await showEvent(link.dataset.event);
+    return;
+  }
+  if(button.id==='signin-tec'){event.preventDefault();showLogin();return;}
+  const d=button.dataset;
+  if(d.action==='close-sheet'){modalRequest++;dialog.close();return;}
+  if(d.action==='recover'){
+    sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Reset password</h2><form data-form="recover"><label>TEC account email<input type="email" name="email" required></label>${errorLine}<button class="action full">Send reset email</button></form></div>`);return;
+  }
+  if(!member)return;
+  if(d.nav)go(d.nav);
+  else if(d.filter){filter=d.filter;render();}
+  else if(d.event)await showEvent(d.event);
+  else if(d.flyer){const e=events.find(e=>e.id===d.flyer);if(e)imageView(e.title,e.thumbnail);}
+  else if(d.vehicle)vehicleDetails(vehicles.find(v=>v.id===d.vehicle));
+  else if(d.memberGarage)vehicleDetails(memberGarages.find(v=>v.id===d.memberGarage));
+  else if(d.edit)vehicleForm(vehicles.find(v=>v.id===d.edit));
+  else if(d.photo!==undefined){const p=photos[Number(d.photo)];if(p)imageView(p.caption||'Club photo',p.url);}
+  else if(d.perk)showPerk(d.perk);
+  else if(d.action==='retry-perks')await loadPerks();
+  else if(d.action==='refresh')await refresh();
+  else if(d.action==='add-vehicle')vehicleForm();
+  else if(d.action==='photo-upload')sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Add photos</h2><form data-form="photos"><label>Gallery photos<input name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>${errorLine}<button class="action full">Upload photos</button></form></div>`);
+  else if(d.action==='about')sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">${esc(member.name)}</h2><form data-form="logout">${errorLine}<button class="action secondary full">Sign out</button></form></div>`);
+  else if(d.action==='updates'){
+    const token=++modalRequest;
+    try{const {announcements}=await request('/api/announcements');if(token===modalRequest&&member)sheet(`<div class="sheet-body">${closeButton()}<h2 id="sheet-title">Notifications</h2>${announcements.map(a=>`<h3>${esc(a.title)}</h3><p>${esc(a.body)}</p>`).join('')||'<p>No new announcements.</p>'}</div>`);}
+    catch(error){toast(error.message);}
+  }
+});
+dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
+$('#preview-tec').href='https://appassets.androidplatform.net/index.html#app';
+window.addEventListener('pageshow',event=>{if(event.persisted)startMember().catch(error=>resetSession(error.message));});
+document.addEventListener('visibilitychange',()=>{if(!document.hidden&&member&&!dialog.open)refresh();});
+startMember().catch(error=>resetSession(error.message));
