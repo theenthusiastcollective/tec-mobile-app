@@ -7,6 +7,69 @@ let member = null, vehicles = [], memberGarages = [], events = [], photos = [];
 let rsvps = {}, view = 'home', filter = 'all', toastTimer, revision = 0, modalRequest = 0;
 let dataError = '', loading = false;
 const splash = $('#tec-splash'), shell = $('#member-app'), dialog = $('#sheet');
+let announcementRequest = 0;
+let announcementOpening = 0;
+const bell = $('[data-action="updates"]');
+
+function announcementKey(memberId) {
+  return 'tec-announcements-read:' + memberId;
+}
+
+function readAnnouncements(memberId) {
+  try {
+    const ids = JSON.parse(localStorage.getItem(announcementKey(memberId)) || '[]');
+    return new Set(Array.isArray(ids) ? ids : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function setBellUnread(unread) {
+  bell.setAttribute('aria-label', unread ? 'Notifications, unread updates' : 'Notifications');
+  bell.style.color = unread ? '#fff' : '';
+  bell.style.filter = unread ? 'drop-shadow(0 0 4px #ff3b46)' : '';
+  bell.style.position = 'relative';
+  bell.querySelector('.notification-dot')?.remove();
+  if (!unread) return;
+  const dot = document.createElement('span');
+  dot.className = 'notification-dot';
+  dot.setAttribute('aria-hidden', 'true');
+  dot.style.cssText = 'position:absolute;top:7px;right:7px;width:7px;height:7px;border-radius:50%;background:#ff3b46;box-shadow:0 0 5px #ff3b46;pointer-events:none';
+  bell.append(dot);
+}
+
+async function refreshAnnouncements({open = false} = {}) {
+  const memberId = member?.id;
+  if (!memberId || (!open && announcementOpening)) return;
+  const token = open ? ++modalRequest : modalRequest;
+  const requestId = ++announcementRequest;
+  if (open) announcementOpening = requestId;
+  try {
+    const {announcements} = await request('/api/announcements');
+    if (requestId !== announcementRequest || member?.id !== memberId) return;
+    const read = readAnnouncements(memberId);
+    const unread = announcements.filter(item => !read.has(item.id));
+    setBellUnread(unread.length > 0);
+    if (!open || modalRequest !== token) return;
+    const history = announcements.filter(item => read.has(item.id));
+    const items = entries => entries.map(item =>
+      `<article><h3>${esc(item.title)}</h3><p>${esc(item.body)}</p></article>`).join('');
+    sheet(`<div class="sheet-body">${closeButton()}<h2 id="sheet-title">Notifications</h2>
+      ${unread.length ? items(unread) : '<p>No unread notifications.</p>'}
+      <details><summary>View old notifications</summary>
+        ${history.length ? items(history) : '<p>No older notifications.</p>'}
+      </details></div>`, true);
+    const seen = [...new Set([...announcements.map(item => item.id), ...read])].slice(0, 250);
+    try { localStorage.setItem(announcementKey(memberId), JSON.stringify(seen)); }
+    catch { return; }
+    setBellUnread(false);
+  } catch (error) {
+    if (open && modalRequest === token && member?.id === memberId) toast(error.message);
+  } finally {
+    if (announcementOpening === requestId) announcementOpening = 0;
+  }
+}
+
 const errorLine = '<p role="alert" class="form-error"></p>';
 const clubImage = path => /^\/(?:assets\/[a-zA-Z0-9_.%/-]+|api\/media\/[A-Za-z0-9_-]+)$/.test(path || '') && !path.includes('..') ? path : '';
 const pathFor = id => '/api/events/' + encodeURIComponent(id);
@@ -43,6 +106,7 @@ async function request(path, method='GET', body) {
 function resetSession(message='') {
   revision++; modalRequest++; member=null; vehicles=[]; events=[]; photos=[]; memberGarages=[]; rsvps={};
   dataError=''; loading=false; view='home'; filter='all'; publishedPerks=[];
+  announcementRequest++; setBellUnread(false);
   dialog.close(); $('#sheet-content').replaceChildren(); $('#app-main').replaceChildren();
   shell.hidden=true; splash.hidden=false;
   showLogin(message);
@@ -137,7 +201,7 @@ async function startMember() {
   const profile=await request('/api/me');
   if (token!==revision) return;
   if (!profile.member) {resetSession(profile.membershipRemoved?'This membership is no longer active.':'');return;}
-  dialog.close(); setMember(profile); await refresh();
+  dialog.close(); setMember(profile); void refreshAnnouncements(); await refresh();
 }
 async function refresh() {
   const token=++revision;
@@ -367,14 +431,17 @@ document.addEventListener('click',async event=>{
   else if(d.action==='add-vehicle')vehicleForm();
   else if(d.action==='photo-upload')sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Add photos</h2><form data-form="photos"><label>Gallery photos<input name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>${errorLine}<button class="action full">Upload photos</button></form></div>`);
   else if(d.action==='about')sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">${esc(member.name)}</h2><form data-form="logout">${errorLine}<button class="action secondary full">Sign out</button></form><p><a href="https://teccarclub.com/privacy.html">Privacy Policy</a></p></div>`);
-  else if(d.action==='updates'){
-    const token=++modalRequest;
-    try{const {announcements}=await request('/api/announcements');if(token===modalRequest&&member)sheet(`<div class="sheet-body">${closeButton()}<h2 id="sheet-title">Notifications</h2>${announcements.map(a=>`<h3>${esc(a.title)}</h3><p>${esc(a.body)}</p>`).join('')||'<p>No new announcements.</p>'}</div>`);}
-    catch(error){toast(error.message);}
-  }
+  else if(d.action==='updates')await refreshAnnouncements({open:true});
 });
 dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
 $('#preview-tec').href='https://appassets.androidplatform.net/index.html#app';
 window.addEventListener('pageshow',event=>{if(event.persisted)startMember().catch(error=>resetSession(error.message));});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&member&&!dialog.open)refresh();});
+document.addEventListener('visibilitychange',()=>{
+  if (document.hidden || !member || dialog.open) return;
+  void refreshAnnouncements();
+  void refresh();
+});
+setInterval(()=>{
+  if (!document.hidden && !dialog.open) void refreshAnnouncements();
+},60000);
 startMember().catch(error=>resetSession(error.message));
