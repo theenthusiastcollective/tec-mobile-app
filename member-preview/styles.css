@@ -285,7 +285,7 @@ dialog[open] {
 .chat-bubble svg{width:23px;height:23px;fill:none;stroke:currentColor;stroke-width:1.65;stroke-linecap:round;stroke-linejoin:round;pointer-events:none}
 .chat-unread{position:absolute;right:1px;top:0;width:8px;height:8px;border-radius:50%;background:#ff4c5b;box-shadow:0 0 6px #ff4c5b;pointer-events:none}
 .form-sheet.chat-sheet{padding:16px}
-.chat-sheet h2{margin:4px 64px 14px 0}
+.chat-sheet h2{margin:4px 64px 14px 0;font-size:clamp(.75rem,3.2vw,.9rem)}
 .chat-thread{display:flex;flex-direction:column;gap:12px;min-height:9rem;max-height:min(48dvh,27rem);overflow-y:auto;overscroll-behavior:contain;padding:12px 10px;background:#0d1015;border:1px solid #ffffff13;border-radius:13px}
 .chat-message{flex:none;align-self:flex-start;max-width:83%;min-width:0}
 .chat-message-own{align-self:flex-end}
