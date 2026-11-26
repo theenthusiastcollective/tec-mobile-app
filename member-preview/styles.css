@@ -328,3 +328,6 @@ dialog[open] {
 .event-ticket-compact .ticket-footer .action[data-event]{min-height:32px;padding:6px 9px}
 /* Override the Perks card's inline padding. */
 .action[data-perk]{min-height:34px;padding:5px 10px!important}
+
+.app-scroll{background:#090b0e url('assets/2713.jpg') center top / cover no-repeat}
+#app-main{background:transparent}
