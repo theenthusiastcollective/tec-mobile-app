@@ -444,4 +444,6 @@ document.addEventListener('visibilitychange',()=>{
 setInterval(()=>{
   if (!document.hidden && !dialog.open) void refreshAnnouncements();
 },60000);
-startMember().catch(error=>resetSession(error.message));
+startMember().then(()=>{
+  if (!member && new URLSearchParams(location.search).has('register')) showRegistration();
+}).catch(error=>resetSession(error.message));

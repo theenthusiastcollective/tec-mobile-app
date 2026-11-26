@@ -91,7 +91,8 @@ public final class MemberPreviewActivity extends ComponentActivity {
             }
             @Override public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
                 Uri uri = request.getUrl();
-                if (MEMBER.equals(uri.toString()) || HOME.equals(uri.toString())
+                if (MEMBER.equals(uri.toString()) || (MEMBER + "?register").equals(uri.toString())
+                        || HOME.equals(uri.toString())
                         || (local(uri) && "/index.html".equals(uri.getPath()))) return false;
                 if (request.isForMainFrame() && request.hasGesture() && "https".equals(uri.getScheme())
                         && !local(uri) && uri.getHost() != null && uri.getUserInfo() == null) {
