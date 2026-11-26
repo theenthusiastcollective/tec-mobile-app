@@ -103,10 +103,124 @@ async function request(path, method='GET', body) {
   }
   return data;
 }
+const chatBubble = document.createElement('button');
+chatBubble.type = 'button';
+chatBubble.className = 'chat-bubble';
+chatBubble.setAttribute('aria-label', 'TEC member chat');
+chatBubble.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l1.6-3.3A7.5 7.5 0 1 1 20 11.5Z"/><path d="M9 12h7"/></svg><span class="chat-unread" hidden></span>';
+shell.append(chatBubble);
+
+let chatDrag = null, chatDragged = false, chatRequest = 0;
+let chatPosition = {side:'right',offset:0};
+try {
+  const saved = JSON.parse(localStorage.getItem('tec-chat-position'));
+  if (saved && ['left','right'].includes(saved.side) && Number.isFinite(saved.offset)) chatPosition = saved;
+} catch {}
+
+function chatBounds() {
+  const nav = shell.querySelector('.tabbar');
+  const navTop = nav?.getBoundingClientRect().top || innerHeight - 64;
+  return {left:9,right:Math.max(9,innerWidth-chatBubble.offsetWidth-9),top:10,
+    bottom:Math.max(10,navTop-chatBubble.offsetHeight-10)};
+}
+function moveChatBubble(x,y) {
+  const b=chatBounds();
+  chatBubble.style.left=Math.max(b.left,Math.min(x,b.right))+'px';
+  chatBubble.style.top=Math.max(b.top,Math.min(y,b.bottom))+'px';
+  chatBubble.style.right='auto';
+  chatBubble.style.bottom='auto';
+}
+function placeChatBubble() {
+  if (!member || shell.hidden) return;
+  const b=chatBounds();
+  moveChatBubble(chatPosition.side==='left'?b.left:b.right,b.bottom-chatPosition.offset);
+}
+window.addEventListener('resize',placeChatBubble);
+chatBubble.addEventListener('pointerdown',event=>{
+  if (!event.isPrimary || event.button!==0) return;
+  chatDragged=false;
+  const box=chatBubble.getBoundingClientRect();
+  chatDrag={pointer:event.pointerId,x:event.clientX,y:event.clientY,left:box.left,top:box.top};
+  chatBubble.setPointerCapture(event.pointerId);
+});
+chatBubble.addEventListener('pointermove',event=>{
+  if (chatDrag?.pointer!==event.pointerId) return;
+  const x=event.clientX-chatDrag.x,y=event.clientY-chatDrag.y;
+  if (!chatDragged && Math.hypot(x,y)<6) return;
+  chatDragged=true;
+  moveChatBubble(chatDrag.left+x,chatDrag.top+y);
+});
+function finishChatDrag(event) {
+  if (chatDrag?.pointer!==event.pointerId) return;
+  chatDrag=null;
+  if(!chatDragged)return;
+  const box=chatBubble.getBoundingClientRect(), bounds=chatBounds();
+  chatPosition={side:box.left+box.width/2<innerWidth/2?'left':'right',offset:Math.max(0,bounds.bottom-box.top)};
+  try { localStorage.setItem('tec-chat-position',JSON.stringify(chatPosition)); } catch {}
+  placeChatBubble();
+}
+chatBubble.addEventListener('pointerup',finishChatDrag);
+chatBubble.addEventListener('pointercancel',finishChatDrag);
+chatBubble.addEventListener('click',event=>{
+  if (chatDragged && event.detail!==0){chatDragged=false;return;}
+  if(!member)return;
+  sheet(`<div class="form-sheet chat-sheet">${closeButton()}<h2 id="sheet-title">TEC member chat</h2>
+    <div class="chat-thread" role="log" aria-label="Chat messages"></div>
+    <p class="chat-status" role="status">Loading messages…</p>
+    <form data-form="chat-message"><label>Message<textarea name="message" maxlength="1000" rows="2" required disabled></textarea></label>
+    ${errorLine}<button class="action full" disabled>Send</button></form></div>`,true);
+  void refreshChat();
+});
+function chatRead(key) {
+  try { return Number(localStorage.getItem(key)) || 0; } catch { return 0; }
+}
+function chatUnread(show) {
+  chatBubble.querySelector('.chat-unread').hidden=!show;
+  chatBubble.setAttribute('aria-label',show?'TEC member chat, unread messages':'TEC member chat');
+}
+async function refreshChat() {
+  if (!member || document.hidden) return;
+  const owner=member.id, requestId=++chatRequest;
+  try {
+    const {messages,paused}=await request('/api/chat');
+    if (requestId!==chatRequest || member?.id!==owner) return;
+    const panel=dialog.open && dialog.querySelector('.chat-sheet');
+    const key='tec-chat-read:'+owner, lastRead=chatRead(key);
+    if(!panel){
+      chatUnread(messages.some(message=>message.id>lastRead && message.memberId!==owner));
+      return;
+    }
+    const thread=panel.querySelector('.chat-thread');
+    const atBottom=thread.scrollHeight-thread.scrollTop-thread.clientHeight<24;
+    const display=[...messages].reverse().map(message=>`<article class="chat-message">
+      <header><strong>${esc(message.name)}</strong><time>${esc(new Date(message.createdAt).toLocaleString())}</time></header>
+      <p>${esc(message.body)}</p></article>`).join('');
+    if(thread.innerHTML!==display){
+      thread.innerHTML=display;
+      if(atBottom)thread.scrollTop=thread.scrollHeight;
+    }
+    panel.querySelector('.chat-status').textContent=paused?'The organizer paused posting.':messages.length?'':'No messages yet.';
+    panel.querySelector('textarea').disabled=paused;
+    panel.querySelector('form button').disabled=paused || !!panel.querySelector('form').dataset.saving;
+    if(atBottom){
+      try { localStorage.setItem(key,String(Math.max(lastRead,messages[0]?.id||0))); } catch {}
+      chatUnread(false);
+    }else chatUnread(messages.some(message=>message.id>lastRead && message.memberId!==owner));
+  }catch(error){
+    const status=dialog.open && dialog.querySelector('.chat-status');
+    if(requestId===chatRequest && member?.id===owner && status)status.textContent=error.message;
+  }
+}
+setInterval(()=>{
+  if(!member || document.hidden)return;
+  if(!dialog.open || dialog.querySelector('.chat-sheet'))void refreshChat();
+},5000);
+
 function resetSession(message='') {
   revision++; modalRequest++; member=null; vehicles=[]; events=[]; photos=[]; memberGarages=[]; rsvps={};
   dataError=''; loading=false; view='home'; filter='all'; publishedPerks=[];
   announcementRequest++; setBellUnread(false);
+  chatRequest++; chatUnread(false);
   dialog.close(); $('#sheet-content').replaceChildren(); $('#app-main').replaceChildren();
   shell.hidden=true; splash.hidden=false;
   showLogin(message);
@@ -201,7 +315,7 @@ async function startMember() {
   const profile=await request('/api/me');
   if (token!==revision) return;
   if (!profile.member) {resetSession(profile.membershipRemoved?'This membership is no longer active.':'');return;}
-  dialog.close(); setMember(profile); void refreshAnnouncements(); await refresh();
+  dialog.close(); setMember(profile); placeChatBubble(); void refreshChat(); void refreshAnnouncements(); await refresh();
 }
 async function refresh() {
   const token=++revision;
@@ -326,6 +440,10 @@ async function submitForm(form) {
     await request('/api/auth/recovery-code','POST',{email:data.get('email'),code:data.get('code')});
     form.reset();await startMember();return;
   }
+  if(kind==='chat-message'){
+    await request('/api/chat','POST',{message:data.get('message')});
+    form.reset();await refreshChat();return;
+  }
   if(kind==='login'){
     await request('/api/auth/password-signin','POST',{email:data.get('email'),password:data.get('password')});
     localStorage.removeItem(recoveryKey);form.elements.password.value='';await startMember();return;
@@ -396,7 +514,7 @@ document.addEventListener('submit',async event=>{
   form.dataset.saving='1';const submit=form.querySelector('button');submit.disabled=true;
   try{await submitForm(form);}
   catch(error){form.querySelector('.form-error').textContent=error.message;}
-  finally{delete form.dataset.saving;submit.disabled=false;}
+  finally{delete form.dataset.saving;submit.disabled=form.dataset.form==='chat-message' && form.elements.message.disabled;}
 });
 document.addEventListener('click',async event=>{
   const button=event.target.closest('button,a');
@@ -439,6 +557,7 @@ window.addEventListener('pageshow',event=>{if(event.persisted)startMember().catc
 document.addEventListener('visibilitychange',()=>{
   if (document.hidden || !member || dialog.open) return;
   void refreshAnnouncements();
+  void refreshChat();
   void refresh();
 });
 setInterval(()=>{
