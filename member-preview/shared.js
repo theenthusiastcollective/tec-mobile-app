@@ -34,7 +34,7 @@ let publishedPerks = [];
 let perksRequest = 0;
 
 function perksPage() {
-  return '<section class="page"><h1 class="page-title">Member Perks</h1><div class="perk-list" id="perk-list" aria-live="polite">Loading offers…</div></section>';
+  return '<section class="page"><h1 class="page-title">Member Perks</h1><p class="page-subtitle"><small>Mention The Enthusiast Collective to receive a discount.</small></p><div class="perk-list" id="perk-list" aria-live="polite">Loading offers…</div></section>';
 }
 async function loadPerks() {
   const list = $('#perk-list');
@@ -48,7 +48,7 @@ async function loadPerks() {
     if (request !== perksRequest || list !== $('#perk-list')) return;
     publishedPerks = data.perks.filter(p => p && p.active && typeof p.business === 'string' && typeof p.title === 'string');
     list.innerHTML = publishedPerks.length ? publishedPerks.map(p =>
-      `<button class="event-venue-details perk-button" data-perk="${esc(p.id)}" aria-haspopup="dialog"><strong>${esc(p.business)}</strong><span>${esc(p.title)}</span></button>`
+      `<article class="event-venue-details"><strong>${esc(p.business)}</strong><div style="margin-top:8px"><button type="button" class="action" style="font-size:11px;padding:6px 12px" data-perk="${esc(p.id)}" aria-label="View offer from ${esc(p.business)}" aria-haspopup="dialog">View Offer</button></div></article>`
     ).join('') : 'No published offers at the moment.';
   } catch {
     if (request === perksRequest && list === $('#perk-list')) {
