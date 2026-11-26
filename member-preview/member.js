@@ -236,10 +236,17 @@ function resetSession(message='') {
   shell.hidden=true; splash.hidden=false;
   showLogin(message);
 }
+const rememberedEmailKey = 'tec-remembered-email';
+function rememberedEmail() {
+  try { return localStorage.getItem(rememberedEmailKey) || ''; }
+  catch { return ''; }
+}
 function showLogin(message='') {
+  const email = rememberedEmail();
   sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Member sign in</h2>
-    <form data-form="login"><label>Email<input type="email" name="email" autocomplete="username" required></label>
+    <form data-form="login"><label>Email<input type="email" name="email" autocomplete="username" value="${esc(email)}" required></label>
     <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+    <label style="display:flex;align-items:center;gap:8px"><input type="checkbox" name="remember" ${email?'checked':''} style="width:auto;min-height:0;margin:0">Remember my email on this device</label>
     <p role="alert" class="form-error">${esc(message)}</p><button class="action full">Sign in</button></form>
     <button class="small-link" data-action="recover">Forgot password?</button> <button class="small-link" data-action="registration-code">I have a signup code</button></div>`, true);
 }
@@ -457,6 +464,10 @@ async function submitForm(form) {
   }
   if(kind==='login'){
     await request('/api/auth/password-signin','POST',{email:data.get('email'),password:data.get('password')});
+    try {
+      if(data.has('remember')) localStorage.setItem(rememberedEmailKey,String(data.get('email')).trim());
+      else localStorage.removeItem(rememberedEmailKey);
+    } catch {}
     localStorage.removeItem(recoveryKey);form.elements.password.value='';await startMember();return;
   }
   if(kind==='recover'){
