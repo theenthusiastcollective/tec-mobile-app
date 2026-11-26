@@ -331,3 +331,14 @@ dialog[open] {
 
 .app-scroll{background:#090b0e url('assets/2713.jpg') center top / cover no-repeat}
 #app-main{background:transparent}
+
+.vehicle-card .vehicle-copy h2,
+.member-garage-body .vehicle-copy h3,
+.build-row .build-caption small{
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+.vehicle-card .vehicle-copy h2,
+.member-garage-body .vehicle-copy h3{font-size:clamp(.75rem,3.5vw,.875rem)}
+.build-row .build-caption small{font-size:.625rem}
