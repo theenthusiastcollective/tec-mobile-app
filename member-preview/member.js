@@ -107,7 +107,7 @@ const chatBubble = document.createElement('button');
 chatBubble.type = 'button';
 chatBubble.className = 'chat-bubble';
 chatBubble.setAttribute('aria-label', 'TEC member chat');
-chatBubble.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11.5a7.5 7.5 0 0 1-7.5 7.5H5l1.6-3.3A7.5 7.5 0 1 1 20 11.5Z"/><path d="M9 12h7"/></svg><span class="chat-unread" hidden></span>';
+chatBubble.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h11a2 2 0 0 1 2 2v8"/><path d="M5 7h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-5l-5 3v-3H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="7" cy="12.5" r=".8"/><circle cx="10.5" cy="12.5" r=".8"/><circle cx="14" cy="12.5" r=".8"/></svg><span class="chat-unread" hidden></span>';
 shell.append(chatBubble);
 
 let chatDrag = null, chatDragged = false, chatRequest = 0;
@@ -167,8 +167,9 @@ chatBubble.addEventListener('click',event=>{
   sheet(`<div class="form-sheet chat-sheet">${closeButton()}<h2 id="sheet-title">TEC member chat</h2>
     <div class="chat-thread" role="log" aria-label="Chat messages"></div>
     <p class="chat-status" role="status">Loading messages…</p>
-    <form data-form="chat-message"><label>Message<textarea name="message" maxlength="1000" rows="2" required disabled></textarea></label>
-    ${errorLine}<button class="action full" disabled>Send</button></form></div>`,true);
+    <form class="chat-composer" data-form="chat-message">
+    <textarea aria-label="Message" placeholder="Write a message…" name="message" maxlength="1000" rows="1" required disabled></textarea>
+    <button class="action" disabled>Send</button>${errorLine}</form></div>`,true);
   void refreshChat();
 });
 function chatRead(key) {
@@ -192,9 +193,16 @@ async function refreshChat() {
     }
     const thread=panel.querySelector('.chat-thread');
     const atBottom=thread.scrollHeight-thread.scrollTop-thread.clientHeight<24;
-    const display=[...messages].reverse().map(message=>`<article class="chat-message">
-      <header><strong>${esc(message.name)}</strong><time>${esc(new Date(message.createdAt).toLocaleString())}</time></header>
-      <p>${esc(message.body)}</p></article>`).join('');
+    const display=[...messages].reverse().map(message=>{
+      const own=message.memberId===owner;
+      const stamp=new Date(message.createdAt);
+      const time=stamp.toLocaleTimeString([], {hour:'numeric',minute:'2-digit'});
+      return `<article class="chat-message ${own?'chat-message-own':'chat-message-other'}">
+        ${own?'':`<strong class="chat-sender">${esc(message.name)}</strong>`}
+        <div class="chat-text"><p>${esc(message.body)}</p>
+          <time datetime="${esc(stamp.toISOString())}" title="${esc(stamp.toLocaleString())}">${esc(time)}</time></div>
+      </article>`;
+    }).join('');
     if(thread.innerHTML!==display){
       thread.innerHTML=display;
       if(atBottom)thread.scrollTop=thread.scrollHeight;
