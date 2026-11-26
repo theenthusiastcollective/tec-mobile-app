@@ -111,7 +111,7 @@ chatBubble.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 
 shell.append(chatBubble);
 
 let chatDrag = null, chatDragged = false, chatRequest = 0;
-let chatPosition = {side:'right',offset:0};
+let chatPosition = null;
 try {
   const saved = JSON.parse(localStorage.getItem('tec-chat-position'));
   if (saved && ['left','right'].includes(saved.side) && Number.isFinite(saved.offset)) chatPosition = saved;
@@ -133,7 +133,10 @@ function moveChatBubble(x,y) {
 function placeChatBubble() {
   if (!member || shell.hidden) return;
   const b=chatBounds();
-  moveChatBubble(chatPosition.side==='left'?b.left:b.right,b.bottom-chatPosition.offset);
+  const home = shell.querySelector('.tabbar [data-nav="home"]')?.getBoundingClientRect();
+  const x = chatPosition ? (chatPosition.side==='left'?b.left:b.right)
+    : home ? home.left+(home.width-chatBubble.offsetWidth)/2 : b.left;
+  moveChatBubble(x,b.bottom-(chatPosition?.offset ?? 0));
 }
 window.addEventListener('resize',placeChatBubble);
 chatBubble.addEventListener('pointerdown',event=>{
@@ -359,7 +362,7 @@ function galleryPage() {
 const views={home,events:eventPage,garage:garagePage,photos:galleryPage,cruise:cruisePage,perks:perksPage};
 function render() {
   if (!member) return;
-  nav();
+  nav(); placeChatBubble();
   const status=dataError?`<p class="empty-state" role="alert">${esc(dataError)} <button class="action" data-action="refresh">Retry</button></p>`:'';
   $('#app-main').innerHTML=status+(loading&&!events.length&&!vehicles.length?'<p class="empty-state" role="status">Loading your membership…</p>':views[view]());
   if(view==='perks')loadPerks();
