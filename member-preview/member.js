@@ -106,6 +106,7 @@ async function request(path, method='GET', body) {
 const chatBubble = document.createElement('button');
 chatBubble.type = 'button';
 chatBubble.className = 'chat-bubble';
+chatBubble.style.visibility = 'hidden';
 chatBubble.setAttribute('aria-label', 'TEC member chat');
 chatBubble.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 4h11a2 2 0 0 1 2 2v8"/><path d="M5 7h11a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-5l-5 3v-3H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2Z"/><circle cx="7" cy="12.5" r=".8"/><circle cx="10.5" cy="12.5" r=".8"/><circle cx="14" cy="12.5" r=".8"/></svg><span class="chat-unread" hidden></span>';
 shell.append(chatBubble);
@@ -118,10 +119,9 @@ try {
 } catch {}
 
 function chatBounds() {
-  const nav = shell.querySelector('.tabbar');
-  const navTop = nav?.getBoundingClientRect().top || innerHeight - 64;
-  return {left:9,right:Math.max(9,innerWidth-chatBubble.offsetWidth-9),top:10,
-    bottom:Math.max(10,navTop-chatBubble.offsetHeight-10)};
+  const navTop = shell.querySelector('.tabbar').getBoundingClientRect().top;
+  const bottom = navTop - chatBubble.offsetHeight - 12;
+  return {left:9,right:Math.max(9,innerWidth-chatBubble.offsetWidth-9),top:Math.min(10,bottom),bottom};
 }
 function moveChatBubble(x,y) {
   const b=chatBounds();
@@ -137,6 +137,7 @@ function placeChatBubble() {
   const x = chatPosition ? (chatPosition.side==='left'?b.left:b.right)
     : home ? home.left+(home.width-chatBubble.offsetWidth)/2 : b.left;
   moveChatBubble(x,b.bottom-(chatPosition?.offset ?? 0));
+  chatBubble.style.visibility = '';
 }
 window.addEventListener('resize',placeChatBubble);
 chatBubble.addEventListener('pointerdown',event=>{
@@ -369,9 +370,10 @@ function galleryPage() {
 const views={home,events:eventPage,garage:garagePage,photos:galleryPage,cruise:cruisePage,perks:perksPage};
 function render() {
   if (!member) return;
-  nav(); placeChatBubble();
+  nav();
   const status=dataError?`<p class="empty-state" role="alert">${esc(dataError)} <button class="action" data-action="refresh">Retry</button></p>`:'';
   $('#app-main').innerHTML=status+(loading&&!events.length&&!vehicles.length?'<p class="empty-state" role="status">Loading your membership…</p>':views[view]());
+  placeChatBubble();
   if(view==='perks')loadPerks();
 }
 function go(next) {
