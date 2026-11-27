@@ -2,6 +2,8 @@ package com.teccarclub.preview;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.pm.PackageInfo;
+import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
@@ -15,6 +17,7 @@ import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
+import androidx.core.content.pm.PackageInfoCompat;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -46,6 +49,16 @@ public final class MemberPreviewActivity extends ComponentActivity {
             pendingPhotos = null;
         });
 
+    private String installedVersion() {
+        try {
+            PackageInfo info = getPackageManager().getPackageInfo(getPackageName(), 0);
+            long build = PackageInfoCompat.getLongVersionCode(info);
+            return info.versionName == null ? "Build " + build : "Version " + info.versionName + " (" + build + ")";
+        } catch (PackageManager.NameNotFoundException ignored) {
+            return "";
+        }
+    }
+
     @Override public void onCreate(Bundle saved) {
         super.onCreate(saved);
         WindowCompat.setDecorFitsSystemWindows(getWindow(), false);
@@ -65,8 +78,18 @@ public final class MemberPreviewActivity extends ComponentActivity {
         web.getSettings().setDomStorageEnabled(true);
         web.getSettings().setAllowFileAccess(false);
         web.getSettings().setAllowContentAccess(false);
+        String version = installedVersion();
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
+                Uri page = Uri.parse(url);
+                boolean memberScreen = "https".equals(page.getScheme())
+                        && CLUB_HOST.equals(page.getAuthority())
+                        && (MEMBER_ROOT + "member.html").equals(page.getPath());
+                if (!version.isEmpty() && (HOME.equals(url) || memberScreen) && url.equals(view.getUrl())) {
+                    view.evaluateJavascript("(function(){const label=document.getElementById('tec-app-version');"
+                            + "if(label){label.textContent=" + org.json.JSONObject.quote(version)
+                            + ";label.hidden=false;}})()", null);
+                }
                 if (MEMBER.equals(url) && MEMBER.equals(view.getUrl()) && pendingEmailToken != null) {
                     String token = pendingEmailToken;
                     pendingEmailToken = null;

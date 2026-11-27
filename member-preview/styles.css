@@ -274,6 +274,7 @@ dialog[open] {
 
 .app-footer{background:var(--base);padding-bottom:calc(4px + env(safe-area-inset-bottom,0px))}
 .app-footer .app-motto{margin:0;border-top:0;padding:4px 0}
+.app-version{margin:0 0 2px;color:#898989;font-size:11px;line-height:1.25;text-align:center}
 .build-row{align-items:stretch}
 .build-tile{display:flex;flex-direction:column}
 .build-row .build-photo{flex:none}
