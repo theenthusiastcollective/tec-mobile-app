@@ -395,13 +395,29 @@ function go(next) {
   if(!Object.hasOwn(views,next))return;
   view=next;render();$('#app-scroll').scrollTop=0;
 }
+function vehiclePhotoGallery(vehicle) {
+  const extraPhotos = (vehicle.photos || []).filter(photo => clubImage(photo.url) && photo.url !== vehicle.image);
+  if (!extraPhotos.length) return '';
+  return `<div class="gallery-grid" aria-label="More vehicle photos">${extraPhotos.map((photo,index) =>
+    `<button type="button" class="gallery-button" data-vehicle-photo="${esc(photo.url)}" aria-label="Open additional vehicle photo ${index+1}">
+      <img src="${esc(photo.url)}" alt="" loading="lazy">
+    </button>`).join('')}</div>`;
+}
+
 function vehicleForm(v={}) {
+  const savedPhotos = (v.photos || []).filter(photo => clubImage(photo.url));
+  const coverOptions = savedPhotos.map((photo,index) =>
+    `<option value="${esc(photo.id)}" ${photo.id===v.image_id?'selected':''}>Saved photo ${index+1}${photo.status==='pending'?' (pending approval)':''}</option>`).join('');
+  const thumbnails = savedPhotos.map((photo,index) =>
+    `<figure style="margin:0"><img src="${esc(photo.url)}" alt="" loading="lazy" style="width:100%;height:auto"><figcaption>Saved photo ${index+1}</figcaption></figure>`).join('');
   const field=(name,title,max)=>`<label>${title}<input name="${name}" maxlength="${max}" value="${esc(v[name])}" ${name==='color'?'':'required'}></label>`;
   sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">${v.id?'Edit vehicle':'Add vehicle'}</h2><form data-form="vehicle" data-id="${esc(v.id)}">
     <label>Year<input type="number" name="year" min="1900" max="${new Date().getFullYear()+2}" value="${esc(v.year)}" required></label>
     ${field('make','Make',60)}${field('model','Model',100)}${field('color','Color',50)}
     <label>What Makes It Special<textarea name="mods" maxlength="1800">${esc(v.mods)}</textarea></label>
-    <label>Vehicle photo<input type="file" name="photo" accept="image/jpeg,image/png,image/webp"></label>${errorLine}
+    <label>Add vehicle photos<input type="file" name="photo" accept="image/jpeg,image/png,image/webp" multiple></label>
+    ${thumbnails?`<div class="gallery-grid">${thumbnails}</div>`:''}
+    <label>Cover photo<select name="cover"><option value="">${v.image_id?'Keep current cover':'Use first uploaded photo'}</option>${coverOptions}</select></label>${errorLine}
     <button class="action full">Save vehicle</button></form></div>`);
 }
 function showMemberGarage(id) {
@@ -414,6 +430,7 @@ function showMemberGarage(id) {
         <h3>${esc(vehicle.title)}</h3>
         ${vehicle.color ? `<p>${esc(vehicle.color)}</p>` : ''}
         ${vehicle.mods ? `<p>${esc(vehicle.mods)}</p>` : ''}
+        ${vehiclePhotoGallery(vehicle)}
       </div>
     </article>`).join('');
   sheet(`<div class="media-dialog-tools">${closeButton()}</div>
@@ -423,7 +440,7 @@ function showMemberGarage(id) {
 }
 function vehicleDetails(v) {
   if(!v)return;
-  sheet(`<div class="sheet-cover">${vehicleImage(v)}${closeButton()}</div><div class="sheet-body"><p class="eyebrow">${esc(v.owner)}’s Garage</p><h2 id="sheet-title">${esc(v.title)}</h2><p>${esc(v.color)}</p><p>${esc(v.mods)}</p>${v.personal?`<button class="action full" data-edit="${esc(v.id)}">Edit vehicle</button>`:''}</div>`,true);
+  sheet(`<div class="sheet-cover">${vehicleImage(v)}${closeButton()}</div><div class="sheet-body"><p class="eyebrow">${esc(v.owner)}’s Garage</p><h2 id="sheet-title">${esc(v.title)}</h2><p>${esc(v.color)}</p><p>${esc(v.mods)}</p>${vehiclePhotoGallery(v)}${v.personal?`<button class="action full" data-edit="${esc(v.id)}">Edit vehicle</button>`:''}</div>`,true);
 }
 function imageView(title,url) {
   if(!url)return;
@@ -519,17 +536,25 @@ async function submitForm(form) {
   if(!member)return;
   if(kind==='vehicle'){
     const vehicle=vehicles.find(v=>v.id===id);
-    let imageId=vehicle?.image_id||null;
-    const photo=form.elements.photo.files[0];
-    if(photo){
-      if(form.uploadedFile!==photo){
+    const files=[...form.elements.photo.files];
+    const knownIds=new Set([vehicle?.image_id,...(vehicle?.photos || []).map(photo=>photo.id)].filter(Boolean));
+    if(knownIds.size+files.length>12)throw new Error('A vehicle can have up to 12 photos.');
+    if(files.some(photo=>!photo.size||photo.size>5*1024*1024))throw new Error('Choose JPEG, PNG or WebP photos under 5 MB each.');
+    form.vehicleUploads ||= new Map();
+    const addedPhotoIds=[];
+    for(const photo of files){
+      if(!form.vehicleUploads.has(photo)){
         const saved=await upload(photo,'garage');
-        form.uploadedFile=photo; form.uploadedId=saved.id;
+        form.vehicleUploads.set(photo,saved.id);
       }
-      imageId=form.uploadedId;
+      addedPhotoIds.push(form.vehicleUploads.get(photo));
     }
+    const selected=String(data.get('cover') || '');
+    const imageId=selected.startsWith('new:')
+      ? addedPhotoIds[Number(selected.slice(4))]
+      : selected||vehicle?.image_id||addedPhotoIds[0]||null;
     const {year,make,model,color,mods}=Object.fromEntries(data);
-    await request('/api/vehicles'+(id?'/'+encodeURIComponent(id):''),id?'PUT':'POST',{year:Number(year),make,model,color,mods,imageId});
+    await request('/api/vehicles'+(id?'/'+encodeURIComponent(id):''),id?'PUT':'POST',{year:Number(year),make,model,color,mods,imageId,addedPhotoIds});
     dialog.close();toast('Vehicle saved to your TEC garage.');await refresh();
   }
   if(kind==='rsvp'){
@@ -581,6 +606,7 @@ document.addEventListener('click',async event=>{
   else if(d.vehicle)vehicleDetails(vehicles.find(v=>v.id===d.vehicle));
   else if(d.memberGarage) showMemberGarage(d.memberGarage);
   else if(d.edit)vehicleForm(vehicles.find(v=>v.id===d.edit));
+  else if(d.vehiclePhoto)imageView('Vehicle photo',clubImage(d.vehiclePhoto));
   else if(d.photo!==undefined){const p=photos[Number(d.photo)];if(p)imageView(p.caption||'Club photo',p.url);}
   else if(d.perk)showPerk(d.perk);
   else if(d.action==='retry-perks')await loadPerks();
@@ -592,6 +618,19 @@ document.addEventListener('click',async event=>{
 });
 dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
 window.addEventListener('pageshow',event=>{if(event.persisted)startMember().catch(error=>resetSession(error.message));});
+document.addEventListener('change',event=>{
+  const input=event.target;
+  if(!input.matches('form[data-form="vehicle"] input[name="photo"]'))return;
+  const cover=input.form.elements.cover;
+  if(cover.value.startsWith('new:'))cover.value='';
+  cover.querySelectorAll('option[data-new-photo]').forEach(option=>option.remove());
+  [...input.files].forEach((file,index)=>{
+    const option=new Option('New photo '+(index+1)+' · '+file.name,'new:'+index);
+    option.dataset.newPhoto='';
+    cover.add(option);
+  });
+});
+
 document.addEventListener('visibilitychange',()=>{
   if (document.hidden || !member || dialog.open) return;
   void refreshAnnouncements();
