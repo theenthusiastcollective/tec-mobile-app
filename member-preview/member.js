@@ -471,9 +471,43 @@ async function showEvent(id) {
     if(token===modalRequest&&dialog.open&&member)sheet(`<div class="sheet-body">${closeButton()}<h2 id="sheet-title">Event details</h2><p>${esc(error.message)}</p><button class="action" data-event="${esc(id)}">Retry</button></div>`,true);
   }
 }
+const photoUploadLimit = 5 * 1024 * 1024;
+
+async function preparePhoto(file) {
+  if (!file.size) throw new Error('Choose a JPEG, PNG or WebP photo.');
+  if (file.size <= photoUploadLimit) return file;
+
+  const url = URL.createObjectURL(file);
+  try {
+    const image = new Image();
+    image.src = url;
+    await image.decode();
+    const canvas = document.createElement('canvas');
+    const context = canvas.getContext('2d');
+    const type = file.type === 'image/jpeg' ? 'image/jpeg' : 'image/webp';
+    let scale = Math.min(1, 2560 / Math.max(image.naturalWidth, image.naturalHeight));
+    for (const quality of [.9, .82, .74]) {
+      canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+      canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+      context.drawImage(image, 0, 0, canvas.width, canvas.height);
+      const blob = await new Promise(resolve => canvas.toBlob(resolve, type, quality));
+      if (blob && blob.size <= photoUploadLimit) {
+        const extension = {'image/jpeg':'jpg','image/webp':'webp','image/png':'png'}[blob.type];
+        if (extension) return new File([blob], file.name.replace(/\.[^.]+$/, '') + '.' + extension, {type:blob.type});
+      }
+      scale *= .75;
+    }
+  } catch {
+    throw new Error('This photo could not be resized. Try a JPEG, PNG or WebP copy.');
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+  throw new Error('This photo is too large to resize for upload.');
+}
+
 async function upload(file,kind) {
-  if(file.size>5*1024*1024)throw new Error('Choose a JPEG, PNG or WebP under 5 MB.');
-  const body=new FormData();body.set('file',file);body.set('kind',kind);
+  const photo = await preparePhoto(file);
+  const body=new FormData();body.set('file',photo);body.set('kind',kind);
   return request('/api/uploads','POST',body);
 }
 async function submitForm(form) {
@@ -539,7 +573,6 @@ async function submitForm(form) {
     const files=[...form.elements.photo.files];
     const knownIds=new Set([vehicle?.image_id,...(vehicle?.photos || []).map(photo=>photo.id)].filter(Boolean));
     if(knownIds.size+files.length>12)throw new Error('A vehicle can have up to 12 photos.');
-    if(files.some(photo=>!photo.size||photo.size>5*1024*1024))throw new Error('Choose JPEG, PNG or WebP photos under 5 MB each.');
     form.vehicleUploads ||= new Map();
     const addedPhotoIds=[];
     for(const photo of files){
