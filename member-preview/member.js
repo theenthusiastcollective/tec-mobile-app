@@ -366,7 +366,7 @@ async function refresh() {
   }
 }
 function garagePage() {
-  return `<section class="page"><h1 class="page-title">My Garage</h1>${vehicles.map(v=>`<article class="vehicle-card"><div class="vehicle-cover">${vehicleImage(v)}</div><div class="vehicle-copy"><h2>${esc(v.title)}</h2><p>${esc(v.mods)}</p><button class="action secondary" data-vehicle="${esc(v.id)}">View/Edit</button></div></article>`).join('')}
+  return `<section class="page"><h1 class="page-title">My Garage</h1>${vehicles.map(v=>`<article class="vehicle-card">${garagePhotoRail(v)}<div class="vehicle-copy"><h2>${esc(v.title)}</h2><p>${esc(v.mods)}</p><button class="action secondary" data-vehicle="${esc(v.id)}">View/Edit</button></div></article>`).join('')}
     <button class="action full" data-action="add-vehicle">${vehicles.length?'Add vehicle':'Create Garage'}</button>
     </section>`;
 }
@@ -395,6 +395,18 @@ function go(next) {
   if(!Object.hasOwn(views,next))return;
   view=next;render();$('#app-scroll').scrollTop=0;
 }
+function garagePhotoRail(vehicle) {
+  const images = [...new Set([vehicle.image, ...(vehicle.photos || []).map(photo => photo.url)].map(clubImage).filter(Boolean))];
+  if (images.length < 2) return `<div class="vehicle-cover">${vehicleImage(vehicle)}</div>`;
+
+  return `<div class="garage-photo-rail" role="region" tabindex="0" aria-label="${esc(vehicle.title)} photos">
+    ${images.map((url,index) => `<button type="button" class="garage-photo-slide" data-vehicle-photo="${esc(url)}"
+      aria-label="Open photo ${index+1} of ${images.length}">
+      <img src="${esc(url)}" alt="" ${index===0?'':'loading="lazy"'} draggable="false">
+    </button>`).join('')}
+  </div>`;
+}
+
 function vehiclePhotoGallery(vehicle) {
   const extraPhotos = (vehicle.photos || []).filter(photo => clubImage(photo.url) && photo.url !== vehicle.image);
   if (!extraPhotos.length) return '';
