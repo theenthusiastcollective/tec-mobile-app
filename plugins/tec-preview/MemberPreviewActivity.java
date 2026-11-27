@@ -7,6 +7,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.TextUtils;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -25,11 +26,13 @@ import androidx.core.view.WindowInsetsCompat;
 import android.widget.FrameLayout;
 import android.widget.Toast;
 import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.FilterInputStream;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.Locale;
 
@@ -78,18 +81,8 @@ public final class MemberPreviewActivity extends ComponentActivity {
         web.getSettings().setDomStorageEnabled(true);
         web.getSettings().setAllowFileAccess(false);
         web.getSettings().setAllowContentAccess(false);
-        String version = installedVersion();
         web.setWebViewClient(new WebViewClient() {
             @Override public void onPageFinished(WebView view, String url) {
-                Uri page = Uri.parse(url);
-                boolean memberScreen = "https".equals(page.getScheme())
-                        && CLUB_HOST.equals(page.getAuthority())
-                        && (MEMBER_ROOT + "member.html").equals(page.getPath());
-                if (!version.isEmpty() && (HOME.equals(url) || memberScreen) && url.equals(view.getUrl())) {
-                    view.evaluateJavascript("(function(){const label=document.getElementById('tec-app-version');"
-                            + "if(label){label.textContent=" + org.json.JSONObject.quote(version)
-                            + ";label.hidden=false;}})()", null);
-                }
                 if (MEMBER.equals(url) && MEMBER.equals(view.getUrl()) && pendingEmailToken != null) {
                     String token = pendingEmailToken;
                     pendingEmailToken = null;
@@ -224,11 +217,29 @@ public final class MemberPreviewActivity extends ComponentActivity {
                     default: type = "text/plain";
                 }
                 return new WebResourceResponse(type, type.startsWith("text/") || ext.equals("js") ? "UTF-8" : null,
-                        getAssets().open("member-preview" + path));
+                        packagedBody(path));
             } catch (IOException ignored) { /* Return a local 404. */ }
         }
         return new WebResourceResponse("text/plain", "UTF-8", 404, "Not found",
                 Collections.emptyMap(), new ByteArrayInputStream(new byte[0]));
+    }
+
+    private InputStream packagedBody(String path) throws IOException {
+        InputStream asset = getAssets().open("member-preview" + path);
+        if (!"/index.html".equals(path) && !"/member.html".equals(path)) return asset;
+
+        String version = installedVersion();
+        if (version.isEmpty()) return asset;
+
+        try (InputStream input = asset; ByteArrayOutputStream bytes = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[4096];
+            int count;
+            while ((count = input.read(buffer)) != -1) bytes.write(buffer, 0, count);
+            String html = new String(bytes.toByteArray(), StandardCharsets.UTF_8);
+            String label = "id=\"tec-app-version\"";
+            html = html.replace(label + " hidden></p>", label + ">" + TextUtils.htmlEncode(version) + "</p>");
+            return new ByteArrayInputStream(html.getBytes(StandardCharsets.UTF_8));
+        }
     }
 
     @Override protected void onSaveInstanceState(Bundle state) {
