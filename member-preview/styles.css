@@ -342,3 +342,13 @@ dialog[open] {
 .vehicle-card .vehicle-copy h2,
 .member-garage-body .vehicle-copy h3{font-size:clamp(.75rem,3.5vw,.875rem)}
 .build-row .build-caption small{font-size:.625rem}
+
+.my-garage-shortcut{position:absolute;top:env(safe-area-inset-top);left:8px;z-index:2;display:inline-flex;align-items:center;gap:5px;min-height:38px;padding:0 8px;border-radius:8px;background:transparent;color:#f4f4f5;font-size:12px;font-weight:700}
+.my-garage-shortcut svg{width:18px;height:18px}
+.my-garage-shortcut[aria-current=page]{background:#4e1b1b80}
+.member-list{display:grid;gap:10px;list-style:none;padding:0;margin:16px 0 0}
+.member-list-row{width:100%;display:flex;align-items:center;gap:12px;padding:8px;text-align:left;border:1px solid #8b3b3b66;border-radius:10px;background:linear-gradient(125deg,#24191d,#14181e 73%)}
+.member-list-thumbnail{display:block;flex:0 0 68px;width:68px;height:48px;object-fit:cover;border:1px solid var(--line);border-radius:6px}
+.member-list-thumbnail.build-placeholder{display:grid;place-items:center;text-align:center;padding:2px;font-size:9px}
+.member-list-copy{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
+.member-list-copy small{color:var(--muted);line-height:1.3}
