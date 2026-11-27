@@ -591,7 +591,6 @@ document.addEventListener('click',async event=>{
   else if(d.action==='updates')await refreshAnnouncements({open:true});
 });
 dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();});
-$('#preview-tec').href='https://appassets.androidplatform.net/index.html#app';
 window.addEventListener('pageshow',event=>{if(event.persisted)startMember().catch(error=>resetSession(error.message));});
 document.addEventListener('visibilitychange',()=>{
   if (document.hidden || !member || dialog.open) return;

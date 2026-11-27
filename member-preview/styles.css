@@ -329,7 +329,7 @@ dialog[open] {
 /* Override the Perks card's inline padding. */
 .action[data-perk]{min-height:34px;padding:5px 10px!important}
 
-.app-scroll{background:#090b0e url('assets/2713.jpg') center top / cover no-repeat}
+.app-scroll{background:#090b0e url('assets/tec-carbon-background.jpg') center top / cover no-repeat}
 #app-main{background:transparent}
 
 .vehicle-card .vehicle-copy h2,
