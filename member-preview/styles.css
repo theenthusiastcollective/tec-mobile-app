@@ -352,3 +352,5 @@ dialog[open] {
 img.member-list-thumbnail {
   box-shadow: 0 3px 8px #0009;
 }
+
+.vehicle-edit-action{min-height:38px;margin-top:12px;padding:8px 13px}

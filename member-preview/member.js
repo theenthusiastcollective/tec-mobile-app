@@ -366,7 +366,7 @@ async function refresh() {
   }
 }
 function garagePage() {
-  return `<section class="page"><h1 class="page-title">My Garage</h1>${vehicles.map(v=>`<article class="vehicle-card"><div class="vehicle-cover">${vehicleImage(v)}</div><div class="vehicle-copy"><h2>${esc(v.title)}</h2><p>${esc(v.mods)}</p><button class="action secondary" data-vehicle="${esc(v.id)}">View</button></div></article>`).join('')}
+  return `<section class="page"><h1 class="page-title">My Garage</h1>${vehicles.map(v=>`<article class="vehicle-card"><div class="vehicle-cover">${vehicleImage(v)}</div><div class="vehicle-copy"><h2>${esc(v.title)}</h2><p>${esc(v.mods)}</p><button class="action secondary" data-vehicle="${esc(v.id)}">View/Edit</button></div></article>`).join('')}
     <button class="action full" data-action="add-vehicle">${vehicles.length?'Add vehicle':'Create Garage'}</button>
     </section>`;
 }
@@ -440,7 +440,7 @@ function showMemberGarage(id) {
 }
 function vehicleDetails(v) {
   if(!v)return;
-  sheet(`<div class="sheet-cover">${vehicleImage(v)}${closeButton()}</div><div class="sheet-body"><p class="eyebrow">${esc(v.owner)}’s Garage</p><h2 id="sheet-title">${esc(v.title)}</h2><p>${esc(v.color)}</p><p>${esc(v.mods)}</p>${vehiclePhotoGallery(v)}${v.personal?`<button class="action full" data-edit="${esc(v.id)}">Edit vehicle</button>`:''}</div>`,true);
+  sheet(`<div class="sheet-cover">${vehicleImage(v)}${closeButton()}</div><div class="sheet-body"><p class="eyebrow">${esc(v.owner)}’s Garage</p><h2 id="sheet-title">${esc(v.title)}</h2><p>${esc(v.color)}</p><p>${esc(v.mods)}</p>${vehiclePhotoGallery(v)}${v.personal?`<button class="action secondary vehicle-edit-action" data-edit="${esc(v.id)}">Edit vehicle</button>`:''}</div>`,true);
 }
 function imageView(title,url) {
   if(!url)return;
