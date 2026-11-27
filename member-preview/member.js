@@ -10,6 +10,12 @@ const splash = $('#tec-splash'), shell = $('#member-app'), dialog = $('#sheet');
 let announcementRequest = 0;
 let announcementOpening = 0;
 const bell = $('[data-action="updates"]');
+const myGarageShortcut = document.createElement('button');
+myGarageShortcut.type = 'button';
+myGarageShortcut.className = 'my-garage-shortcut';
+myGarageShortcut.dataset.nav = 'garage';
+myGarageShortcut.innerHTML = `${icon('garage')}<span>My Garage</span>`;
+shell.querySelector('.app-header').prepend(myGarageShortcut);
 
 function announcementKey(memberId) {
   return 'tec-announcements-read:' + memberId;
@@ -360,17 +366,26 @@ async function refresh() {
   }
 }
 function garagePage() {
-  return `<section class="page"><h1 class="page-title">Your Garage</h1>${vehicles.map(v=>`<article class="vehicle-card"><div class="vehicle-cover">${vehicleImage(v)}</div><div class="vehicle-copy"><h2>${esc(v.title)}</h2><p>${esc(v.mods)}</p><button class="action secondary" data-vehicle="${esc(v.id)}">View</button></div></article>`).join('')}
+  return `<section class="page"><h1 class="page-title">My Garage</h1>${vehicles.map(v=>`<article class="vehicle-card"><div class="vehicle-cover">${vehicleImage(v)}</div><div class="vehicle-copy"><h2>${esc(v.title)}</h2><p>${esc(v.mods)}</p><button class="action secondary" data-vehicle="${esc(v.id)}">View</button></div></article>`).join('')}
     <button class="action full" data-action="add-vehicle">${vehicles.length?'Add vehicle':'Create Garage'}</button>
-    <div class="section-head garage-section-heading"><h2>Member Garages</h2></div><div class="build-row">${memberGarages.map(buildTile).join('')}</div></section>`;
+    </section>`;
+}
+function membersPage() {
+  const rows = memberGarages.map(garage => `<li><button type="button" class="member-list-row" data-member-garage="${esc(garage.id)}">
+    ${garage.image ? `<img class="member-list-thumbnail" src="${esc(garage.image)}" alt="" loading="lazy">` : '<span class="member-list-thumbnail build-placeholder">No Pictures Yet</span>'}
+    <span class="member-list-copy"><strong>${esc(garage.owner)}</strong><small>${esc(garage.title)}</small></span>
+  </button></li>`).join('');
+  return `<section class="page"><h1 class="page-title">Members</h1>${rows ? `<ul class="member-list">${rows}</ul>` : '<p class="empty-state">No member garages yet.</p>'}</section>`;
 }
 function galleryPage() {
   return `<section class="page"><h1 class="page-title">Member &amp; Event Gallery</h1><div class="upload-row"><small>All photos</small><button class="action secondary" data-action="photo-upload">Add photos</button></div><div class="gallery-grid">${photos.map((p,i)=>`<button class="gallery-button" data-photo="${i}" aria-label="Open photo ${i+1}"><img src="${esc(p.url)}" alt="${esc(p.caption||'TEC member photo')}" loading="lazy"></button>`).join('')}</div></section>`;
 }
-const views={home,events:eventPage,garage:garagePage,photos:galleryPage,cruise:cruisePage,perks:perksPage};
+const views={home,events:eventPage,garage:garagePage,members:membersPage,photos:galleryPage,cruise:cruisePage,perks:perksPage};
 function render() {
   if (!member) return;
   nav();
+  if (view === 'garage') myGarageShortcut.setAttribute('aria-current','page');
+  else myGarageShortcut.removeAttribute('aria-current');
   const status=dataError?`<p class="empty-state" role="alert">${esc(dataError)} <button class="action" data-action="refresh">Retry</button></p>`:'';
   $('#app-main').innerHTML=status+(loading&&!events.length&&!vehicles.length?'<p class="empty-state" role="status">Loading your membership…</p>':views[view]());
   placeChatBubble();
