@@ -344,6 +344,7 @@ dialog[open] {
 .build-row .build-caption small{font-size:.625rem}
 
 .my-garage-shortcut{position:absolute;top:env(safe-area-inset-top);left:8px;z-index:2;display:inline-flex;align-items:center;gap:5px;min-height:38px;padding:0 8px;border-radius:8px;background:transparent;color:#f4f4f5;font-size:12px;font-weight:700}
+.my-garage-shortcut span{color:var(--red-highlight)}
 .my-garage-shortcut svg{width:18px;height:18px}
 .my-garage-shortcut[aria-current=page]{background:#4e1b1b80}
 .member-list{display:grid;gap:10px;list-style:none;padding:0;margin:16px 0 0}
