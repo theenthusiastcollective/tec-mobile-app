@@ -5,6 +5,7 @@ const previewLabel = () => '';
 const firstName = () => member.name.trim().split(/\s+/)[0];
 let member = null, vehicles = [], memberGarages = [], events = [], photos = [];
 let rsvps = {}, view = 'home', filter = 'all', toastTimer, revision = 0, modalRequest = 0;
+let previousEvents = [], galleryEventId = '', eventPhotos = [], galleryStatus = '', galleryRequest = 0;
 let dataError = '', loading = false;
 const splash = $('#tec-splash'), shell = $('#member-app'), dialog = $('#sheet');
 let announcementRequest = 0;
@@ -14,7 +15,7 @@ const myGarageShortcut = document.createElement('button');
 myGarageShortcut.type = 'button';
 myGarageShortcut.className = 'my-garage-shortcut';
 myGarageShortcut.dataset.nav = 'garage';
-myGarageShortcut.innerHTML = `${icon('garage')}<span>My Garage</span>`;
+myGarageShortcut.innerHTML = `${icon('garage')}<span>MY GARAGE</span>`;
 shell.querySelector('.app-header').prepend(myGarageShortcut);
 
 function announcementKey(memberId) {
@@ -236,6 +237,7 @@ setInterval(()=>{
 
 function resetSession(message='') {
   revision++; modalRequest++; member=null; vehicles=[]; events=[]; photos=[]; memberGarages=[]; rsvps={};
+  previousEvents=[]; galleryEventId=''; eventPhotos=[]; galleryStatus=''; galleryRequest++;
   dataError=''; loading=false; view='home'; filter='all'; publishedPerks=[];
   announcementRequest++; setBellUnread(false);
   chatRequest++; chatUnread(false);
@@ -350,8 +352,17 @@ async function refresh() {
     if (token!==revision) return;
     if (profile.member?.id!==member?.id) {resetSession('Please sign in to your account.');return;}
     setMember(profile);
-    const today=new Intl.DateTimeFormat('en-CA',{timeZone:'America/New_York',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date());
-    events=listing.events.map(asEvent).filter(e=>e && e.status!=='cancelled' && (e.end?Date.parse(e.end)>=Date.now():e.isoDate>=today)).sort((a,b)=>Date.parse(a.start)-Date.parse(b.start));
+    const now = Date.now();
+    const easternDate = new Intl.DateTimeFormat('en-CA', {timeZone:'America/New_York', year:'numeric', month:'2-digit', day:'2-digit'});
+    const parts = Object.fromEntries(easternDate.formatToParts(now).map(({type,value}) => [type,value]));
+    const today = `${parts.year}-${parts.month}-${parts.day}`;
+    const activeEvents = listing.events.map(asEvent).filter(e => e && e.status !== 'cancelled');
+    const hasEnded = e => {
+      const end = Date.parse(e.end);
+      return Number.isFinite(end) ? end < now : e.isoDate < today;
+    };
+    events = activeEvents.filter(e => !hasEnded(e)).sort((a,b) => Date.parse(a.start)-Date.parse(b.start));
+    previousEvents = activeEvents.filter(hasEnded).sort((a,b) => b.isoDate.localeCompare(a.isoDate));
     rsvps=Object.fromEntries(events.filter(e=>e.myRsvp).map(e=>[e.id,statusLabels[e.myRsvp.status]]));
     memberGarages = garages.members.filter(owner => owner.vehicles.length).map(owner => {
       const garageVehicles = owner.vehicles.map(row => asVehicle(row, owner.name, false));
@@ -359,6 +370,13 @@ async function refresh() {
       return {...cover, id: owner.id, vehicles: garageVehicles};
     });
     photos=gallery.photos.filter(photo=>clubImage(photo.url));
+    if (galleryEventId) {
+      if (previousEvents.some(e => e.id === galleryEventId)) void loadGalleryEvent(galleryEventId);
+      else {
+        galleryEventId = '';
+        galleryRequest++;
+      }
+    }
   } catch(error) {
     if(token===revision) dataError=error.message;
   } finally {
@@ -366,7 +384,7 @@ async function refresh() {
   }
 }
 function garagePage() {
-  return `<section class="page"><h1 class="page-title">My Garage</h1>${vehicles.map(v=>`<article class="vehicle-card">${garagePhotoRail(v)}<div class="vehicle-copy"><h2>${esc(v.title)}</h2><p>${esc(v.mods)}</p><button class="action secondary" data-vehicle="${esc(v.id)}">View/Edit</button></div></article>`).join('')}
+  return `<section class="page"><h1 class="page-title">MY GARAGE</h1>${vehicles.map(v=>`<article class="vehicle-card">${garagePhotoRail(v)}<div class="vehicle-copy"><h2>${esc(v.title)}</h2><p>${esc(v.mods)}</p><button class="action secondary" data-vehicle="${esc(v.id)}">View/Edit</button></div></article>`).join('')}
     <button class="action full" data-action="add-vehicle">${vehicles.length?'Add vehicle':'Create Garage'}</button>
     </section>`;
 }
@@ -377,8 +395,52 @@ function membersPage() {
   </button></li>`).join('');
   return `<section class="page"><h1 class="page-title">Members</h1>${rows ? `<ul class="member-list">${rows}</ul>` : '<p class="empty-state">No member garages yet.</p>'}</section>`;
 }
+function galleryEventOptions(defaultLabel) {
+  return `<option value="">${defaultLabel}</option>` + previousEvents.map(e =>
+    `<option value="${esc(e.id)}"${selected(e.id, galleryEventId)}>${esc(e.title)} · ${e.month} ${Number(e.day)}, ${e.year}</option>`
+  ).join('');
+}
+function visibleGalleryPhotos() {
+  return galleryEventId ? eventPhotos : photos;
+}
+function galleryResults() {
+  if (galleryEventId && galleryStatus) return galleryStatus;
+  const visible = visibleGalleryPhotos();
+  if (!visible.length) return `<p class="empty-state">${galleryEventId ? 'No photos for this event yet.' : 'No photos yet.'}</p>`;
+  return `<div class="gallery-grid">${visible.map((p,i) =>
+    `<button class="gallery-button" data-photo="${i}" aria-label="Open photo ${i+1}"><img src="${esc(p.url)}" alt="${esc(p.caption||'TEC member photo')}" loading="lazy"></button>`
+  ).join('')}</div>`;
+}
+async function loadGalleryEvent(eventId) {
+  const token = ++galleryRequest;
+  galleryEventId = eventId;
+  eventPhotos = [];
+  galleryStatus = '<p class="empty-state" role="status">Loading event photos…</p>';
+  const update = () => {
+    const results = $('#gallery-results');
+    if (results) results.innerHTML = galleryResults();
+  };
+  update();
+  if (!eventId) return;
+  try {
+    const result = await request('/api/gallery?event=' + encodeURIComponent(eventId));
+    if (token !== galleryRequest) return;
+    eventPhotos = result.photos.filter(photo => clubImage(photo.url));
+    galleryStatus = '';
+  } catch {
+    if (token !== galleryRequest) return;
+    galleryStatus = '<p class="empty-state" role="alert">Event photos could not load. <button class="action secondary" data-action="retry-gallery-event">Retry</button></p>';
+  }
+  update();
+}
 function galleryPage() {
-  return `<section class="page"><h1 class="page-title">Member &amp; Event Gallery</h1><div class="upload-row"><small>All photos</small><button class="action secondary" data-action="photo-upload">Add photos</button></div><div class="gallery-grid">${photos.map((p,i)=>`<button class="gallery-button" data-photo="${i}" aria-label="Open photo ${i+1}"><img src="${esc(p.url)}" alt="${esc(p.caption||'TEC member photo')}" loading="lazy"></button>`).join('')}</div></section>`;
+  return `<section class="page"><h1 class="page-title">Member &amp; Event Gallery</h1>
+    <div class="upload-row">
+      <select id="gallery-event-filter" class="gallery-event-select" aria-label="Filter photos by event">${galleryEventOptions('All Photos')}</select>
+      <button class="action secondary" data-action="photo-upload">Add photos</button>
+    </div>
+    <div id="gallery-results">${galleryResults()}</div>
+  </section>`;
 }
 const views={home,events:eventPage,garage:garagePage,members:membersPage,photos:galleryPage,cruise:cruisePage,perks:perksPage};
 function render() {
@@ -393,6 +455,11 @@ function render() {
 }
 function go(next) {
   if(!Object.hasOwn(views,next))return;
+  if (next === 'photos' && view !== 'photos') {
+    galleryEventId = '';
+    eventPhotos = [];
+    galleryRequest++;
+  }
   view=next;render();$('#app-scroll').scrollTop=0;
 }
 function garagePhotoRail(vehicle) {
@@ -517,9 +584,10 @@ async function preparePhoto(file) {
   throw new Error('This photo is too large to resize for upload.');
 }
 
-async function upload(file,kind) {
+async function upload(file,kind,eventId) {
   const photo = await preparePhoto(file);
   const body=new FormData();body.set('file',photo);body.set('kind',kind);
+  if (eventId) body.set('eventId',eventId);
   return request('/api/uploads','POST',body);
 }
 async function submitForm(form) {
@@ -608,13 +676,26 @@ async function submitForm(form) {
     rsvps[id]=statusLabels[result.myRsvp.status];dialog.close();render();toast('Your RSVP is saved.');
   }
   if(kind==='photos'){
-    const files=[...form.elements.photos.files];
-    for(const file of files){
-      if(!form.sentFiles)form.sentFiles=new Set();
-      if(form.sentFiles.has(file))continue;
-      await upload(file,'gallery');form.sentFiles.add(file);
+    const memberId = member.id;
+    const {photos: fileInput, eventId: eventInput} = form.elements;
+    const files = [...fileInput.files];
+    const eventId = eventInput.value;
+    form.sentFiles ||= new Set();
+    fileInput.disabled = eventInput.disabled = true;
+    try {
+      for (const file of files) {
+        if (!form.isConnected || member?.id !== memberId) return;
+        if (form.sentFiles.has(file)) continue;
+        await upload(file, 'gallery', eventId);
+        form.sentFiles.add(file);
+      }
+    } finally {
+      // Keep a partially uploaded batch intact when the member retries.
+      fileInput.disabled = eventInput.disabled = form.sentFiles.size > 0;
     }
-    dialog.close();toast('Photos submitted to the club gallery.');await refresh();
+    if (member?.id !== memberId) return;
+    if (form.isConnected && dialog.open) dialog.close();
+    toast('Photos submitted to the club gallery.');await refresh();
   }
 }
 document.addEventListener('submit',async event=>{
@@ -652,12 +733,18 @@ document.addEventListener('click',async event=>{
   else if(d.memberGarage) showMemberGarage(d.memberGarage);
   else if(d.edit)vehicleForm(vehicles.find(v=>v.id===d.edit));
   else if(d.vehiclePhoto)imageView('Vehicle photo',clubImage(d.vehiclePhoto));
-  else if(d.photo!==undefined){const p=photos[Number(d.photo)];if(p)imageView(p.caption||'Club photo',p.url);}
+  else if(d.photo!==undefined){const p=visibleGalleryPhotos()[Number(d.photo)];if(p)imageView(p.caption||'Club photo',p.url);}
   else if(d.perk)showPerk(d.perk);
   else if(d.action==='retry-perks')await loadPerks();
   else if(d.action==='refresh')await refresh();
   else if(d.action==='add-vehicle')vehicleForm();
-  else if(d.action==='photo-upload')sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Add photos</h2><form data-form="photos"><label>Gallery photos<input name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>${errorLine}<button class="action full">Upload photos</button></form></div>`);
+  else if(d.action==='retry-gallery-event')await loadGalleryEvent(galleryEventId);
+  else if(d.action==='photo-upload')sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">Add photos</h2>
+    <form data-form="photos">
+      <label>Previous event (optional)<select class="gallery-event-select" name="eventId">${galleryEventOptions('No event')}</select></label>
+      <label>Gallery photos<input name="photos" type="file" accept="image/jpeg,image/png,image/webp" multiple required></label>
+      ${errorLine}<button class="action full">Upload photos</button>
+    </form></div>`, true);
   else if(d.action==='about')sheet(`<div class="form-sheet">${closeButton()}<h2 id="sheet-title">${esc(member.name)}</h2><form data-form="logout">${errorLine}<button class="action secondary full">Sign out</button></form><p><a href="https://teccarclub.com/privacy.html">Privacy Policy</a></p></div>`);
   else if(d.action==='updates')await refreshAnnouncements({open:true});
 });
@@ -665,6 +752,10 @@ dialog.addEventListener('click',event=>{if(event.target===dialog)dialog.close();
 window.addEventListener('pageshow',event=>{if(event.persisted)startMember().catch(error=>resetSession(error.message));});
 document.addEventListener('change',event=>{
   const input=event.target;
+  if(input.id==='gallery-event-filter'){
+    void loadGalleryEvent(input.value);
+    return;
+  }
   if(!input.matches('form[data-form="vehicle"] input[name="photo"]'))return;
   const cover=input.form.elements.cover;
   if(cover.value.startsWith('new:'))cover.value='';
